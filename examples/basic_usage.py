@@ -1,8 +1,8 @@
 """
-Example usage of the generated ComfyUI workflow facade.
+Basic usage example for the generated ComfyUI workflow facade.
 
-Run generate_api.py first to produce generated_client.py, then use this
-script to build and submit a prompt payload.
+Run generate_api.py first to produce generated_client.py, then run:
+    python examples/basic_usage.py
 """
 
 import requests
