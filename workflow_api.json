@@ -59,7 +59,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "API_CLIP Text Encode (Positive)"
+      "title": "API_CLIP Text Encode (Prompt)"
     }
   },
   "7": {
@@ -72,7 +72,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "API_CLIP Text Encode (Negative)"
+      "title": "API_CLIP Text Encode (Prompt)"
     }
   },
   "8": {

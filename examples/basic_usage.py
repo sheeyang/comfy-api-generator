@@ -14,8 +14,8 @@ api = ComfyWorkflowAPI()
 
 payload = api.build_payload(
     load_checkpoint_ckpt_name="SD1.5\\v1-5-pruned-emaonly.safetensors",
-    clip_text_encode__positive__text="beautiful scenery nature glass bottle landscape",
-    clip_text_encode__negative__text="text, watermark",
+    clip_text_encode__prompt__text_6="beautiful scenery nature glass bottle landscape",
+    clip_text_encode__prompt__text_7="text, watermark",
     empty_latent_image_width=512,
     empty_latent_image_height=512,
 )

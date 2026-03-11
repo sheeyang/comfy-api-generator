@@ -109,13 +109,14 @@ def _resolve_type(
     return py_type
 
 
-def _title_to_class_name(title: str, node_id: str, seen: dict) -> str:
+def _title_to_class_name(title: str, node_id: str, seen: dict, nodes_map: dict) -> str:
     """
     Convert a node _meta.title to a unique PascalCase inner class name.
 
     Strips 'API_' prefix if present, title-cases each word, removes
-    non-identifier characters. On collision with a previously seen title,
-    appends '_{node_id}' and emits a WARNING.
+    non-identifier characters. On collision, BOTH the original entry and the
+    new one are postfixed with their respective node IDs, so no entry ever
+    holds an ambiguous bare name.
     """
     name = title
     if name.upper().startswith("API_"):
@@ -126,13 +127,26 @@ def _title_to_class_name(title: str, node_id: str, seen: dict) -> str:
         name = f"Node{node_id}"
     if name[0].isdigit():
         name = "N" + name
+
     if name in seen:
+        original_node_id = seen[name]
+        # Retroactively rename the first entry that already has the bare name.
+        original_new_name = f"{name}_{original_node_id}"
+        # Update nodes_map for the original node.
+        if original_node_id in nodes_map:
+            nodes_map[original_node_id]["class_name"] = original_new_name
+        # Re-key seen: the bare name now maps to nothing; register the postfixed original.
+        del seen[name]
+        seen[original_new_name] = original_node_id
+
         new_name = f"{name}_{node_id}"
         print(
-            f"WARNING: Duplicate Nodes class name '{name}' for node {node_id}; "
-            f"renamed to '{new_name}'."
+            f"WARNING: Duplicate Nodes class name '{name}' "
+            f"(nodes {original_node_id} and {node_id}); "
+            f"renamed to '{original_new_name}' and '{new_name}'."
         )
         name = new_name
+
     seen[name] = node_id
     return name
 
@@ -171,7 +185,7 @@ def run_dynamic_generator(
     for node_id, node_data in workflow.items():
         title = node_data.get("_meta", {}).get("title", "")
         class_type = node_data["class_type"]
-        class_name = _title_to_class_name(title, node_id, seen_class_names)
+        class_name = _title_to_class_name(title, node_id, seen_class_names, nodes_map)
 
         raw_output_names = object_info.get(class_type, {}).get("output_name", [])
         if raw_output_names:
@@ -194,7 +208,7 @@ def run_dynamic_generator(
 
     discovered_custom_types: set[str] = set()
     discovered_enums: dict[str, list[str]] = {}
-    seen_arg_names: dict[str, str] = {}  # arg_name -> "node_id.input_name"
+    seen_arg_names: dict[str, tuple] = {}  # arg_name -> (origin_str, node_id)
     args: list[str] = ["        self,", "        *,"]
     assignments: list[str] = []
 
@@ -214,15 +228,30 @@ def run_dynamic_generator(
 
             origin = f"node {node_id} ({title}) › {input_name}"
             if arg_name in seen_arg_names:
+                orig_origin, orig_node_id = seen_arg_names.pop(arg_name)
+                orig_new_name = f"{arg_name}_{orig_node_id}"
                 new_arg_name = f"{arg_name}_{node_id}"
+
+                # Retroactively rename the first occurrence in args and assignments.
+                for i, line in enumerate(args):
+                    if f"        {arg_name}:" in line:
+                        args[i] = line.replace(f"        {arg_name}:", f"        {orig_new_name}:", 1)
+                        break
+                for i, line in enumerate(assignments):
+                    if f"] = {arg_name}" in line:
+                        assignments[i] = line.replace(f"] = {arg_name}", f"] = {orig_new_name}", 1)
+                        break
+
+                seen_arg_names[orig_new_name] = (orig_origin, orig_node_id)
                 print(
                     f"WARNING: Duplicate argument name '{arg_name}':\n"
-                    f"         {seen_arg_names[arg_name]}\n"
+                    f"         {orig_origin}\n"
+                    f"         Renamed to '{orig_new_name}'.\n"
                     f"         {origin}\n"
                     f"         Renamed to '{new_arg_name}'."
                 )
                 arg_name = new_arg_name
-            seen_arg_names[arg_name] = origin
+            seen_arg_names[arg_name] = (origin, node_id)
 
             py_type = _resolve_type(
                 class_type,

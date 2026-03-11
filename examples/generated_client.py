@@ -32,9 +32,9 @@ class Nodes:
         VAE = ('4', 2)
     class EmptyLatentImage:  # node 5 · API_Empty Latent Image
         LATENT = ('5', 0)
-    class ClipTextEncodePositive:  # node 6 · API_CLIP Text Encode (Positive)
+    class ClipTextEncodePrompt_6:  # node 6 · API_CLIP Text Encode (Prompt)
         CONDITIONING = ('6', 0)
-    class ClipTextEncodeNegative:  # node 7 · API_CLIP Text Encode (Negative)
+    class ClipTextEncodePrompt_7:  # node 7 · API_CLIP Text Encode (Prompt)
         CONDITIONING = ('7', 0)
     class VaeDecode:  # node 8 · VAE Decode
         IMAGE = ('8', 0)
@@ -79,17 +79,17 @@ class ComfyWorkflowAPI:
         ksampler_scheduler: KsamplerScheduler = 'normal',
         ksampler_denoise: float = 1,
         ksampler_model: Model = Nodes.LoadCheckpoint.MODEL,
-        ksampler_positive: Conditioning = Nodes.ClipTextEncodePositive.CONDITIONING,
-        ksampler_negative: Conditioning = Nodes.ClipTextEncodeNegative.CONDITIONING,
+        ksampler_positive: Conditioning = Nodes.ClipTextEncodePrompt_6.CONDITIONING,
+        ksampler_negative: Conditioning = Nodes.ClipTextEncodePrompt_7.CONDITIONING,
         ksampler_latent_image: Latent = Nodes.EmptyLatentImage.LATENT,
         load_checkpoint_ckpt_name: LoadCheckpointCkptName = 'v1-5-pruned-emaonly-fp16.safetensors',
         empty_latent_image_width: int = 512,
         empty_latent_image_height: int = 512,
         empty_latent_image_batch_size: int = 1,
-        clip_text_encode__positive__text: str = 'beautiful scenery nature glass bottle landscape, , purple galaxy bottle,',
-        clip_text_encode__positive__clip: Clip = Nodes.LoadCheckpoint.CLIP,
-        clip_text_encode__negative__text: str = 'text, watermark',
-        clip_text_encode__negative__clip: Clip = Nodes.LoadCheckpoint.CLIP,
+        clip_text_encode__prompt__text_6: str = 'beautiful scenery nature glass bottle landscape, , purple galaxy bottle,',
+        clip_text_encode__prompt__clip_6: Clip = Nodes.LoadCheckpoint.CLIP,
+        clip_text_encode__prompt__text_7: str = 'text, watermark',
+        clip_text_encode__prompt__clip_7: Clip = Nodes.LoadCheckpoint.CLIP,
     ) -> Dict[str, Any]:
         """Build a ready-to-submit ComfyUI prompt payload."""
         workflow = copy.deepcopy(self.base_workflow)
@@ -107,8 +107,8 @@ class ComfyWorkflowAPI:
         workflow['5']['inputs']['width'] = empty_latent_image_width
         workflow['5']['inputs']['height'] = empty_latent_image_height
         workflow['5']['inputs']['batch_size'] = empty_latent_image_batch_size
-        workflow['6']['inputs']['text'] = clip_text_encode__positive__text
-        workflow['6']['inputs']['clip'] = clip_text_encode__positive__clip
-        workflow['7']['inputs']['text'] = clip_text_encode__negative__text
-        workflow['7']['inputs']['clip'] = clip_text_encode__negative__clip
+        workflow['6']['inputs']['text'] = clip_text_encode__prompt__text_6
+        workflow['6']['inputs']['clip'] = clip_text_encode__prompt__clip_6
+        workflow['7']['inputs']['text'] = clip_text_encode__prompt__text_7
+        workflow['7']['inputs']['clip'] = clip_text_encode__prompt__clip_7
         return {'prompt': workflow}
