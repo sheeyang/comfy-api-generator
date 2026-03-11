@@ -29,18 +29,44 @@ def _sanitize_identifier(name: str) -> str:
     return name
 
 
+def _enum_alias_name(arg_name: str) -> str:
+    """Convert an arg name like 'sampler_sampler_name' into 'SamplerSamplerName'."""
+    return "".join(word.capitalize() for word in arg_name.split("_"))
+
+
+def _format_default(input_value) -> str:
+    """
+    Return a ' = <value>' default snippet from the workflow's current value.
+
+    Graph connections (list) are excluded — the developer must supply them
+    explicitly since node IDs are workflow-specific.
+    """
+    if isinstance(input_value, list):
+        return ""  # graph connection — required, no default
+    if isinstance(input_value, bool):
+        return f" = {input_value}"
+    if isinstance(input_value, (int, float)):
+        return f" = {input_value}"
+    if isinstance(input_value, str):
+        escaped = input_value.replace("\\", "\\\\").replace('"', '\\"')
+        return f' = "{escaped}"'
+    return ""
+
+
 def _resolve_type(
     class_type: str,
     input_name: str,
+    arg_name: str,
     object_info: dict,
     primitives: dict,
     discovered_custom_types: set,
+    discovered_enums: dict,
 ) -> str:
     """
     Resolve the Python type for a given node input by consulting object_info.
 
     Rules:
-      1. If the schema type is a list (dropdown/enum) -> str
+      1. If the schema type is a list (dropdown/enum) -> Literal[...] alias
       2. If it matches a known primitive (INT, FLOAT, STRING, BOOLEAN) -> builtin
       3. Otherwise -> auto-discover a NewType wrapping ComfyConnection
     """
@@ -54,12 +80,20 @@ def _resolve_type(
             break
 
     if comfy_type is None:
-        # Fallback: if the input value in the workflow is a list (connection),
-        # treat as a generic ComfyConnection; otherwise str.
+        # Fallback: treat as generic str when not found in schema.
         return "str"
 
     if isinstance(comfy_type, list):
-        return "str"
+        # Build a Literal alias from the dropdown choices (strings only).
+        choices = [v for v in comfy_type if isinstance(v, str)]
+        if not choices:
+            return "str"
+        alias = _enum_alias_name(arg_name)
+        # If two inputs share the same alias but have different choices,
+        # keep the first definition (they are typically the same node type).
+        if alias not in discovered_enums:
+            discovered_enums[alias] = choices
+        return alias
 
     if comfy_type in primitives:
         return primitives[comfy_type]
@@ -106,6 +140,7 @@ def run_dynamic_generator(
     }
 
     discovered_custom_types: set[str] = set()
+    discovered_enums: dict[str, list[str]] = {}
     args: list[str] = ["        self,", "        *,"]
     assignments: list[str] = []
 
@@ -126,12 +161,14 @@ def run_dynamic_generator(
             py_type = _resolve_type(
                 class_type,
                 input_name,
+                arg_name,
                 object_info,
                 PRIMITIVES,
                 discovered_custom_types,
+                discovered_enums,
             )
 
-            args.append(f"        {arg_name}: {py_type},")
+            args.append(f"        {arg_name}: {py_type}{_format_default(input_value)},")
             assignments.append(
                 f"        workflow['{node_id}']['inputs']['{input_name}'] = {arg_name}"
             )
@@ -155,7 +192,7 @@ def run_dynamic_generator(
         "import copy",
         "import json",
         "import functools",
-        "from typing import Any, Dict, NewType, Tuple",
+        "from typing import Any, Dict, Literal, NewType, Tuple",
         "",
         "# --- Auto-Generated Strict Types ---",
         "ComfyConnection = Tuple[str, int]",
@@ -165,6 +202,13 @@ def run_dynamic_generator(
         code_lines.append(
             f"{custom_type} = NewType('{custom_type}', ComfyConnection)"
         )
+
+    if discovered_enums:
+        code_lines.append("")
+        code_lines.append("# --- Auto-Generated Enum Types (dropdown choices) ---")
+        for alias, choices in sorted(discovered_enums.items()):
+            joined = ", ".join(f'"{c}"' for c in choices)
+            code_lines.append(f"{alias} = Literal[{joined}]")
 
     code_lines.extend(
         [
@@ -217,7 +261,8 @@ def run_dynamic_generator(
         f.write("\n".join(code_lines))
 
     print(f"Generated {output_path}  ({api_nodes_found} API node(s), "
-          f"{len(discovered_custom_types)} custom type(s))")
+          f"{len(discovered_custom_types)} custom type(s), "
+          f"{len(discovered_enums)} enum type(s))")
 
 
 if __name__ == "__main__":
