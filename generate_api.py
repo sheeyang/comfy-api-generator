@@ -34,17 +34,21 @@ def _enum_alias_name(arg_name: str) -> str:
     return "".join(word.capitalize() for word in arg_name.split("_"))
 
 
-def _format_default(input_value) -> str:
+def _format_default(input_value, nodes_map: dict | None = None) -> str:
     """
     Return a ' = <value>' default snippet from the workflow's current value.
 
-    Graph connections (list) are excluded — the developer must supply them
-    explicitly since node IDs are workflow-specific.
+    For graph connections, emits a Nodes.ClassName.SLOT reference when
+    nodes_map is provided, falling back to a plain tuple.
     """
     if isinstance(input_value, list) and len(input_value) == 2:
-        # Graph connection stored as [node_id, output_index] — emit as tuple default.
-        node_id, output_index = input_value
-        return f' = ({repr(str(node_id))}, {int(output_index)})'
+        ref_id, output_index = str(input_value[0]), int(input_value[1])
+        if nodes_map and ref_id in nodes_map:
+            node_info = nodes_map[ref_id]
+            slots = node_info["slots"]
+            if output_index < len(slots):
+                return f" = Nodes.{node_info['class_name']}.{slots[output_index]}"
+        return f" = ({repr(ref_id)}, {output_index})"
     if isinstance(input_value, bool):
         return f" = {input_value}"
     if isinstance(input_value, (int, float)):
@@ -105,6 +109,34 @@ def _resolve_type(
     return py_type
 
 
+def _title_to_class_name(title: str, node_id: str, seen: dict) -> str:
+    """
+    Convert a node _meta.title to a unique PascalCase inner class name.
+
+    Strips 'API_' prefix if present, title-cases each word, removes
+    non-identifier characters. On collision with a previously seen title,
+    appends '_{node_id}' and emits a WARNING.
+    """
+    name = title
+    if name.upper().startswith("API_"):
+        name = name[4:].strip()
+    name = re.sub(r"[^0-9a-zA-Z]+", " ", name).strip()
+    name = "".join(word.capitalize() for word in name.split())
+    if not name:
+        name = f"Node{node_id}"
+    if name[0].isdigit():
+        name = "N" + name
+    if name in seen:
+        new_name = f"{name}_{node_id}"
+        print(
+            f"WARNING: Duplicate Nodes class name '{name}' for node {node_id}; "
+            f"renamed to '{new_name}'."
+        )
+        name = new_name
+    seen[name] = node_id
+    return name
+
+
 def run_dynamic_generator(
     workflow_path: str = "workflow_api.json",
     output_path: str = "generated_client.py",
@@ -131,7 +163,27 @@ def run_dynamic_generator(
         sys.exit(1)
 
     # ------------------------------------------------------------------
-    # 3. Iterate over API-exposed nodes and resolve types
+    # 3. Build nodes_map: all workflow nodes → class names + output slots
+    # ------------------------------------------------------------------
+    seen_class_names: dict[str, str] = {}  # class_name -> node_id
+    nodes_map: dict[str, dict] = {}
+
+    for node_id, node_data in workflow.items():
+        title = node_data.get("_meta", {}).get("title", "")
+        class_type = node_data["class_type"]
+        class_name = _title_to_class_name(title, node_id, seen_class_names)
+
+        raw_output_names = object_info.get(class_type, {}).get("output_name", [])
+        if raw_output_names:
+            slots = [s.upper() if s else f"OUT_{i}" for i, s in enumerate(raw_output_names)]
+        else:
+            output_count = len(object_info.get(class_type, {}).get("output", []))
+            slots = [f"OUT_{i}" for i in range(output_count)]
+
+        nodes_map[node_id] = {"class_name": class_name, "title": title, "slots": slots}
+
+    # ------------------------------------------------------------------
+    # 4. Iterate over API-exposed nodes and resolve types
     # ------------------------------------------------------------------
     PRIMITIVES = {
         "INT": "int",
@@ -162,13 +214,14 @@ def run_dynamic_generator(
 
             origin = f"node {node_id} ({title}) › {input_name}"
             if arg_name in seen_arg_names:
+                new_arg_name = f"{arg_name}_{node_id}"
                 print(
-                    f"ERROR: Duplicate argument name '{arg_name}' produced by:\n"
-                    f"       {seen_arg_names[arg_name]}\n"
-                    f"       {origin}\n"
-                    f"       Rename one of the API_ node titles to make them unique."
+                    f"WARNING: Duplicate argument name '{arg_name}':\n"
+                    f"         {seen_arg_names[arg_name]}\n"
+                    f"         {origin}\n"
+                    f"         Renamed to '{new_arg_name}'."
                 )
-                sys.exit(1)
+                arg_name = new_arg_name
             seen_arg_names[arg_name] = origin
 
             py_type = _resolve_type(
@@ -181,7 +234,7 @@ def run_dynamic_generator(
                 discovered_enums,
             )
 
-            args.append(f"        {arg_name}: {py_type}{_format_default(input_value)},")
+            args.append(f"        {arg_name}: {py_type}{_format_default(input_value, nodes_map)},")
             assignments.append(
                 f"        workflow['{node_id}']['inputs']['{input_name}'] = {arg_name}"
             )
@@ -222,6 +275,21 @@ def run_dynamic_generator(
         for alias, choices in sorted(discovered_enums.items()):
             joined = ", ".join(repr(c) for c in choices)
             code_lines.append(f"{alias} = Literal[{joined}]")
+
+    # Nodes namespace — one inner class per workflow node, slots as tuple constants
+    code_lines.append("")
+    code_lines.append("")
+    code_lines.append("# --- Workflow Node Connections ---")
+    code_lines.append("class Nodes:")
+    for nid, ninfo in nodes_map.items():
+        code_lines.append(
+            f"    class {ninfo['class_name']}:  # node {nid} · {ninfo['title']}"
+        )
+        if ninfo["slots"]:
+            for idx, slot in enumerate(ninfo["slots"]):
+                code_lines.append(f"        {slot} = ({repr(nid)}, {idx})")
+        else:
+            code_lines.append("        pass")
 
     code_lines.extend(
         [
