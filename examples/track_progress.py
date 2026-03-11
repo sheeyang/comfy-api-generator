@@ -24,8 +24,9 @@ client_id = str(uuid.uuid4())
 api = ComfyWorkflowAPI()
 
 payload = api.build_payload(
-    negative_prompt_value="text, watermark",
+    load_checkpoint_ckpt_name="SD1.5\\v1-5-pruned-emaonly.safetensors",
     positive_prompt_value="beautiful scenery nature glass bottle landscape",
+    negative_prompt_value="text, watermark",
     width_value=512,
     height_value=512,
 )

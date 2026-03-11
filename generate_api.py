@@ -48,8 +48,7 @@ def _format_default(input_value) -> str:
     if isinstance(input_value, (int, float)):
         return f" = {input_value}"
     if isinstance(input_value, str):
-        escaped = input_value.replace("\\", "\\\\").replace('"', '\\"')
-        return f' = "{escaped}"'
+        return f" = {repr(input_value)}"
     return ""
 
 
@@ -207,7 +206,7 @@ def run_dynamic_generator(
         code_lines.append("")
         code_lines.append("# --- Auto-Generated Enum Types (dropdown choices) ---")
         for alias, choices in sorted(discovered_enums.items()):
-            joined = ", ".join(f'"{c}"' for c in choices)
+            joined = ", ".join(repr(c) for c in choices)
             code_lines.append(f"{alias} = Literal[{joined}]")
 
     code_lines.extend(

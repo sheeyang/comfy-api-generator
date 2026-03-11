@@ -12,6 +12,9 @@ from typing import Any, Dict, Literal, NewType, Tuple
 # --- Auto-Generated Strict Types ---
 ComfyConnection = Tuple[str, int]
 
+# --- Auto-Generated Enum Types (dropdown choices) ---
+LoadCheckpointCkptName = Literal['SD1.5\\v1-5-pruned-emaonly.safetensors']
+
 
 # --- Runtime Validation ---
 def validate_connections(func):
@@ -43,13 +46,15 @@ class ComfyWorkflowAPI:
     def build_payload(
         self,
         *,
-        negative_prompt_value: str = "",
-        positive_prompt_value: str = "",
+        load_checkpoint_ckpt_name: LoadCheckpointCkptName = 'SD1.5\\v1-5-pruned-emaonly.safetensors',
+        negative_prompt_value: str = '',
+        positive_prompt_value: str = '',
         width_value: int = 0,
         height_value: int = 0,
     ) -> Dict[str, Any]:
         """Build a ready-to-submit ComfyUI prompt payload."""
         workflow = copy.deepcopy(self.base_workflow)
+        workflow['4']['inputs']['ckpt_name'] = load_checkpoint_ckpt_name
         workflow['11']['inputs']['value'] = negative_prompt_value
         workflow['12']['inputs']['value'] = positive_prompt_value
         workflow['13']['inputs']['value'] = width_value
