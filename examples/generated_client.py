@@ -91,7 +91,28 @@ class ComfyWorkflowAPI:
         clip_text_encode__prompt__text_7: str = 'text, watermark',
         clip_text_encode__prompt__clip_7: Clip = Nodes.LoadCheckpoint.CLIP,
     ) -> Dict[str, Any]:
-        """Build a ready-to-submit ComfyUI prompt payload."""
+        """Build a ready-to-submit ComfyUI prompt payload.
+
+        Args:
+            ksampler_seed: The random seed used for creating the noise [min=0, max=18446744073709551615].
+            ksampler_steps: The number of steps used in the denoising process [min=1, max=10000].
+            ksampler_cfg: The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality [min=0.0, max=100.0].
+            ksampler_sampler_name: The algorithm used when sampling, this can affect the quality, speed, and style of the generated output.
+            ksampler_scheduler: The scheduler controls how noise is gradually removed to form the image.
+            ksampler_denoise: The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling [min=0.0, max=1.0].
+            ksampler_model: The model used for denoising the input latent.
+            ksampler_positive: The conditioning describing the attributes you want to include in the image.
+            ksampler_negative: The conditioning describing the attributes you want to exclude from the image.
+            ksampler_latent_image: The latent image to denoise.
+            load_checkpoint_ckpt_name: The name of the checkpoint (model) to load.
+            empty_latent_image_width: The width of the latent images in pixels [min=16, max=16384].
+            empty_latent_image_height: The height of the latent images in pixels [min=16, max=16384].
+            empty_latent_image_batch_size: The number of latent images in the batch [min=1, max=4096].
+            clip_text_encode__prompt__text_6: The text to be encoded.
+            clip_text_encode__prompt__clip_6: The CLIP model used for encoding the text.
+            clip_text_encode__prompt__text_7: The text to be encoded.
+            clip_text_encode__prompt__clip_7: The CLIP model used for encoding the text.
+        """
         workflow = copy.deepcopy(self.base_workflow)
         workflow['3']['inputs']['seed'] = ksampler_seed
         workflow['3']['inputs']['steps'] = ksampler_steps

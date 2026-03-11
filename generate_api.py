@@ -58,6 +58,28 @@ def _format_default(input_value, nodes_map: dict | None = None) -> str:
     return ""
 
 
+def _get_input_doc(class_type: str, input_name: str, object_info: dict) -> str:
+    """Extract tooltip and numeric constraints from object_info for a given input."""
+    node_schema = object_info.get(class_type, {}).get("input", {})
+    for section in ("required", "optional"):
+        section_data = node_schema.get(section, {})
+        if input_name in section_data:
+            spec = section_data[input_name]
+            meta = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            parts = []
+            if meta.get("tooltip"):
+                parts.append(meta["tooltip"].rstrip("."))
+            constraints = []
+            if "min" in meta:
+                constraints.append(f"min={meta['min']}")
+            if "max" in meta:
+                constraints.append(f"max={meta['max']}")
+            if constraints:
+                parts.append(f"[{', '.join(constraints)}]")
+            return " ".join(parts)
+    return ""
+
+
 def _resolve_type(
     class_type: str,
     input_name: str,
@@ -211,6 +233,7 @@ def run_dynamic_generator(
     seen_arg_names: dict[str, tuple] = {}  # arg_name -> (origin_str, node_id)
     args: list[str] = ["        self,", "        *,"]
     assignments: list[str] = []
+    doc_entries: list[tuple[str, str]] = []  # [(arg_name, description)]
 
     api_nodes_found = 0
 
@@ -243,6 +266,11 @@ def run_dynamic_generator(
                         break
 
                 seen_arg_names[orig_new_name] = (orig_origin, orig_node_id)
+                # Retroactively rename the doc entry for the first occurrence.
+                for i, (dname, ddoc) in enumerate(doc_entries):
+                    if dname == arg_name:
+                        doc_entries[i] = (orig_new_name, ddoc)
+                        break
                 print(
                     f"WARNING: Duplicate argument name '{arg_name}':\n"
                     f"         {orig_origin}\n"
@@ -263,6 +291,8 @@ def run_dynamic_generator(
                 discovered_enums,
             )
 
+            description = _get_input_doc(class_type, input_name, object_info)
+            doc_entries.append((arg_name, description))
             args.append(f"        {arg_name}: {py_type}{_format_default(input_value, nodes_map)},")
             assignments.append(
                 f"        workflow['{node_id}']['inputs']['{input_name}'] = {arg_name}"
@@ -358,7 +388,17 @@ def run_dynamic_generator(
 
     code_lines.extend(args)
     code_lines.append("    ) -> Dict[str, Any]:")
-    code_lines.append('        """Build a ready-to-submit ComfyUI prompt payload."""')
+    # Build multi-line docstring with Args section.
+    code_lines.append('        """Build a ready-to-submit ComfyUI prompt payload.')
+    if doc_entries:
+        code_lines.append("")
+        code_lines.append("        Args:")
+        for arg_name, description in doc_entries:
+            if description:
+                code_lines.append(f"            {arg_name}: {description}.")
+            else:
+                code_lines.append(f"            {arg_name}:")
+    code_lines.append('        """')
     code_lines.append("        workflow = copy.deepcopy(self.base_workflow)")
     code_lines.extend(assignments)
     code_lines.append("        return {'prompt': workflow}")
