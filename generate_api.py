@@ -140,6 +140,7 @@ def run_dynamic_generator(
 
     discovered_custom_types: set[str] = set()
     discovered_enums: dict[str, list[str]] = {}
+    seen_arg_names: dict[str, str] = {}  # arg_name -> "node_id.input_name"
     args: list[str] = ["        self,", "        *,"]
     assignments: list[str] = []
 
@@ -156,6 +157,17 @@ def run_dynamic_generator(
 
         for input_name, input_value in node_data["inputs"].items():
             arg_name = f"{node_name}_{_sanitize_identifier(input_name)}"
+
+            origin = f"node {node_id} ({title}) › {input_name}"
+            if arg_name in seen_arg_names:
+                print(
+                    f"ERROR: Duplicate argument name '{arg_name}' produced by:\n"
+                    f"       {seen_arg_names[arg_name]}\n"
+                    f"       {origin}\n"
+                    f"       Rename one of the API_ node titles to make them unique."
+                )
+                sys.exit(1)
+            seen_arg_names[arg_name] = origin
 
             py_type = _resolve_type(
                 class_type,
