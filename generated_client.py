@@ -11,10 +11,6 @@ from typing import Any, Dict, NewType, Tuple
 
 # --- Auto-Generated Strict Types ---
 ComfyConnection = Tuple[str, int]
-Clip = NewType('Clip', ComfyConnection)
-Conditioning = NewType('Conditioning', ComfyConnection)
-Latent = NewType('Latent', ComfyConnection)
-Model = NewType('Model', ComfyConnection)
 
 
 # --- Runtime Validation ---
@@ -47,35 +43,15 @@ class ComfyWorkflowAPI:
     def build_payload(
         self,
         *,
-        sampler_seed: int,
-        sampler_steps: int,
-        sampler_cfg: float,
-        sampler_sampler_name: str,
-        sampler_scheduler: str,
-        sampler_denoise: float,
-        sampler_model: Model,
-        sampler_positive: Conditioning,
-        sampler_negative: Conditioning,
-        sampler_latent_image: Latent,
-        positive_prompt_text: str,
-        positive_prompt_clip: Clip,
-        negative_prompt_text: str,
-        negative_prompt_clip: Clip,
+        negative_prompt_value: str,
+        positive_prompt_value: str,
+        width_value: int,
+        height_value: int,
     ) -> Dict[str, Any]:
         """Build a ready-to-submit ComfyUI prompt payload."""
         workflow = copy.deepcopy(self.base_workflow)
-        workflow['3']['inputs']['seed'] = sampler_seed
-        workflow['3']['inputs']['steps'] = sampler_steps
-        workflow['3']['inputs']['cfg'] = sampler_cfg
-        workflow['3']['inputs']['sampler_name'] = sampler_sampler_name
-        workflow['3']['inputs']['scheduler'] = sampler_scheduler
-        workflow['3']['inputs']['denoise'] = sampler_denoise
-        workflow['3']['inputs']['model'] = sampler_model
-        workflow['3']['inputs']['positive'] = sampler_positive
-        workflow['3']['inputs']['negative'] = sampler_negative
-        workflow['3']['inputs']['latent_image'] = sampler_latent_image
-        workflow['6']['inputs']['text'] = positive_prompt_text
-        workflow['6']['inputs']['clip'] = positive_prompt_clip
-        workflow['7']['inputs']['text'] = negative_prompt_text
-        workflow['7']['inputs']['clip'] = negative_prompt_clip
+        workflow['11']['inputs']['value'] = negative_prompt_value
+        workflow['12']['inputs']['value'] = positive_prompt_value
+        workflow['13']['inputs']['value'] = width_value
+        workflow['14']['inputs']['value'] = height_value
         return {'prompt': workflow}

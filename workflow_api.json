@@ -26,12 +26,12 @@
     },
     "class_type": "KSampler",
     "_meta": {
-      "title": "API_Sampler"
+      "title": "KSampler"
     }
   },
   "4": {
     "inputs": {
-      "ckpt_name": "v1-5-pruned-emaonly-fp16.safetensors"
+      "ckpt_name": "SD1.5\\v1-5-pruned-emaonly.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
@@ -40,8 +40,14 @@
   },
   "5": {
     "inputs": {
-      "width": 512,
-      "height": 512,
+      "width": [
+        "13",
+        0
+      ],
+      "height": [
+        "14",
+        0
+      ],
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -51,7 +57,10 @@
   },
   "6": {
     "inputs": {
-      "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+      "text": [
+        "12",
+        0
+      ],
       "clip": [
         "4",
         1
@@ -59,12 +68,15 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "API_Positive_Prompt"
+      "title": "CLIP Text Encode (Prompt)"
     }
   },
   "7": {
     "inputs": {
-      "text": "text, watermark",
+      "text": [
+        "11",
+        0
+      ],
       "clip": [
         "4",
         1
@@ -72,7 +84,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "API_Negative_Prompt"
+      "title": "CLIP Text Encode (Prompt)"
     }
   },
   "8": {
@@ -102,6 +114,42 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "11": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "API_Negative_Prompt"
+    }
+  },
+  "12": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "API_Positive_Prompt"
+    }
+  },
+  "13": {
+    "inputs": {
+      "value": 0
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "API_Width"
+    }
+  },
+  "14": {
+    "inputs": {
+      "value": 0
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "API_Height"
     }
   }
 }
