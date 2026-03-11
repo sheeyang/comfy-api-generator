@@ -6,15 +6,12 @@ script to build and submit a prompt payload.
 """
 
 import requests
-from generated_client import ComfyWorkflowAPI, Latent
+from generated_client import ComfyWorkflowAPI, Clip, Conditioning, Latent, Model
 
 COMFYUI_URL = "http://127.0.0.1:8188"
 
 api = ComfyWorkflowAPI()
 
-# IDE provides strict autocomplete and enforces correct NewTypes.
-# The @validate_connections decorator ensures tuples are strictly (str, int)
-# at runtime.
 payload = api.build_payload(
     sampler_seed=42,
     sampler_steps=20,
@@ -22,16 +19,15 @@ payload = api.build_payload(
     sampler_sampler_name="euler",
     sampler_scheduler="normal",
     sampler_denoise=1.0,
-    sampler_model=("4", 0),
-    sampler_positive=("6", 0),
-    sampler_negative=("7", 0),
+    sampler_model=Model(("4", 0)),
+    sampler_positive=Conditioning(("6", 0)),
+    sampler_negative=Conditioning(("7", 0)),
     sampler_latent_image=Latent(("5", 0)),
-    prompt_text="beautiful scenery nature glass bottle landscape",
+    positive_prompt_text="beautiful scenery nature glass bottle landscape",
+    positive_prompt_clip=Clip(("4", 1)),
     negative_prompt_text="text, watermark",
+    negative_prompt_clip=Clip(("4", 1)),
 )
-
-# This would fail static type checking AND throw a ValueError at runtime:
-# payload = api.build_payload(sampler_latent_image=["node_5", "index_0"], ...)
 
 response = requests.post(f"{COMFYUI_URL}/prompt", json=payload)
 print(response.status_code, response.json())
