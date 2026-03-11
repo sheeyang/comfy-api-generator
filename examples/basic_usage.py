@@ -14,10 +14,10 @@ api = ComfyWorkflowAPI()
 
 payload = api.build_payload(
     load_checkpoint_ckpt_name="SD1.5\\v1-5-pruned-emaonly.safetensors",
-    positive_prompt_value="beautiful scenery nature glass bottle landscape",
-    negative_prompt_value="text, watermark",
-    width_value=512,
-    height_value=512,
+    clip_text_encode__positive__text="beautiful scenery nature glass bottle landscape",
+    clip_text_encode__negative__text="text, watermark",
+    empty_latent_image_width=512,
+    empty_latent_image_height=512,
 )
 
 response = requests.post(f"{COMFYUI_URL}/prompt", json=payload)

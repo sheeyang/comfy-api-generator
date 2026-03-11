@@ -41,8 +41,10 @@ def _format_default(input_value) -> str:
     Graph connections (list) are excluded — the developer must supply them
     explicitly since node IDs are workflow-specific.
     """
-    if isinstance(input_value, list):
-        return ""  # graph connection — required, no default
+    if isinstance(input_value, list) and len(input_value) == 2:
+        # Graph connection stored as [node_id, output_index] — emit as tuple default.
+        node_id, output_index = input_value
+        return f' = ({repr(str(node_id))}, {int(output_index)})'
     if isinstance(input_value, bool):
         return f" = {input_value}"
     if isinstance(input_value, (int, float)):

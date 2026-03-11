@@ -11,8 +11,14 @@ from typing import Any, Dict, Literal, NewType, Tuple
 
 # --- Auto-Generated Strict Types ---
 ComfyConnection = Tuple[str, int]
+Clip = NewType('Clip', ComfyConnection)
+Conditioning = NewType('Conditioning', ComfyConnection)
+Latent = NewType('Latent', ComfyConnection)
+Model = NewType('Model', ComfyConnection)
 
 # --- Auto-Generated Enum Types (dropdown choices) ---
+KsamplerSamplerName = Literal['euler', 'euler_cfg_pp', 'euler_ancestral', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'exp_heun_2_x0', 'exp_heun_2_x0_sde', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde_heun', 'dpmpp_2m_sde_heun_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'res_multistep', 'res_multistep_cfg_pp', 'res_multistep_ancestral', 'res_multistep_ancestral_cfg_pp', 'gradient_estimation', 'gradient_estimation_cfg_pp', 'er_sde', 'seeds_2', 'seeds_3', 'sa_solver', 'sa_solver_pece', 'ddim', 'uni_pc', 'uni_pc_bh2']
+KsamplerScheduler = Literal['simple', 'sgm_uniform', 'karras', 'exponential', 'ddim_uniform', 'beta', 'normal', 'linear_quadratic', 'kl_optimal']
 LoadCheckpointCkptName = Literal['SD1.5\\v1-5-pruned-emaonly.safetensors']
 
 
@@ -46,17 +52,43 @@ class ComfyWorkflowAPI:
     def build_payload(
         self,
         *,
-        load_checkpoint_ckpt_name: LoadCheckpointCkptName = 'SD1.5\\v1-5-pruned-emaonly.safetensors',
-        negative_prompt_value: str = '',
-        positive_prompt_value: str = '',
-        width_value: int = 0,
-        height_value: int = 0,
+        ksampler_seed: int = 156680208700286,
+        ksampler_steps: int = 20,
+        ksampler_cfg: float = 8,
+        ksampler_sampler_name: KsamplerSamplerName = 'euler',
+        ksampler_scheduler: KsamplerScheduler = 'normal',
+        ksampler_denoise: float = 1,
+        ksampler_model: Model = ('4', 0),
+        ksampler_positive: Conditioning = ('6', 0),
+        ksampler_negative: Conditioning = ('7', 0),
+        ksampler_latent_image: Latent = ('5', 0),
+        load_checkpoint_ckpt_name: LoadCheckpointCkptName = 'v1-5-pruned-emaonly-fp16.safetensors',
+        empty_latent_image_width: int = 512,
+        empty_latent_image_height: int = 512,
+        empty_latent_image_batch_size: int = 1,
+        clip_text_encode__positive__text: str = 'beautiful scenery nature glass bottle landscape, , purple galaxy bottle,',
+        clip_text_encode__positive__clip: Clip = ('4', 1),
+        clip_text_encode__negative__text: str = 'text, watermark',
+        clip_text_encode__negative__clip: Clip = ('4', 1),
     ) -> Dict[str, Any]:
         """Build a ready-to-submit ComfyUI prompt payload."""
         workflow = copy.deepcopy(self.base_workflow)
+        workflow['3']['inputs']['seed'] = ksampler_seed
+        workflow['3']['inputs']['steps'] = ksampler_steps
+        workflow['3']['inputs']['cfg'] = ksampler_cfg
+        workflow['3']['inputs']['sampler_name'] = ksampler_sampler_name
+        workflow['3']['inputs']['scheduler'] = ksampler_scheduler
+        workflow['3']['inputs']['denoise'] = ksampler_denoise
+        workflow['3']['inputs']['model'] = ksampler_model
+        workflow['3']['inputs']['positive'] = ksampler_positive
+        workflow['3']['inputs']['negative'] = ksampler_negative
+        workflow['3']['inputs']['latent_image'] = ksampler_latent_image
         workflow['4']['inputs']['ckpt_name'] = load_checkpoint_ckpt_name
-        workflow['11']['inputs']['value'] = negative_prompt_value
-        workflow['12']['inputs']['value'] = positive_prompt_value
-        workflow['13']['inputs']['value'] = width_value
-        workflow['14']['inputs']['value'] = height_value
+        workflow['5']['inputs']['width'] = empty_latent_image_width
+        workflow['5']['inputs']['height'] = empty_latent_image_height
+        workflow['5']['inputs']['batch_size'] = empty_latent_image_batch_size
+        workflow['6']['inputs']['text'] = clip_text_encode__positive__text
+        workflow['6']['inputs']['clip'] = clip_text_encode__positive__clip
+        workflow['7']['inputs']['text'] = clip_text_encode__negative__text
+        workflow['7']['inputs']['clip'] = clip_text_encode__negative__clip
         return {'prompt': workflow}

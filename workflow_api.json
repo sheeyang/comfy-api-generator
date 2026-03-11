@@ -26,12 +26,12 @@
     },
     "class_type": "KSampler",
     "_meta": {
-      "title": "KSampler"
+      "title": "API_KSampler"
     }
   },
   "4": {
     "inputs": {
-      "ckpt_name": "SD1.5\\v1-5-pruned-emaonly.safetensors"
+      "ckpt_name": "v1-5-pruned-emaonly-fp16.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
@@ -40,27 +40,18 @@
   },
   "5": {
     "inputs": {
-      "width": [
-        "13",
-        0
-      ],
-      "height": [
-        "14",
-        0
-      ],
+      "width": 512,
+      "height": 512,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
     "_meta": {
-      "title": "Empty Latent Image"
+      "title": "API_Empty Latent Image"
     }
   },
   "6": {
     "inputs": {
-      "text": [
-        "12",
-        0
-      ],
+      "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
       "clip": [
         "4",
         1
@@ -68,15 +59,12 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Prompt)"
+      "title": "API_CLIP Text Encode (Positive)"
     }
   },
   "7": {
     "inputs": {
-      "text": [
-        "11",
-        0
-      ],
+      "text": "text, watermark",
       "clip": [
         "4",
         1
@@ -84,7 +72,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Prompt)"
+      "title": "API_CLIP Text Encode (Negative)"
     }
   },
   "8": {
@@ -114,42 +102,6 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
-    }
-  },
-  "11": {
-    "inputs": {
-      "value": ""
-    },
-    "class_type": "PrimitiveStringMultiline",
-    "_meta": {
-      "title": "API_Negative_Prompt"
-    }
-  },
-  "12": {
-    "inputs": {
-      "value": ""
-    },
-    "class_type": "PrimitiveStringMultiline",
-    "_meta": {
-      "title": "API_Positive_Prompt"
-    }
-  },
-  "13": {
-    "inputs": {
-      "value": 0
-    },
-    "class_type": "PrimitiveInt",
-    "_meta": {
-      "title": "API_Width"
-    }
-  },
-  "14": {
-    "inputs": {
-      "value": 0
-    },
-    "class_type": "PrimitiveInt",
-    "_meta": {
-      "title": "API_Height"
     }
   }
 }
