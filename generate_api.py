@@ -561,5 +561,122 @@ def run_dynamic_generator(
           f"{len(discovered_enums)} enum type(s))")
 
 
+def _build_arg_parser():
+    import argparse
+    p = argparse.ArgumentParser(
+        prog="generate_api",
+        description=(
+            "Generate a strongly-typed Python facade from a ComfyUI workflow.\n\n"
+            "Nodes whose _meta.title starts with 'API_' are exposed as typed\n"
+            "parameters on the generated build_payload() method."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python generate_api.py\n"
+            "  python generate_api.py --workflow my_workflow.json --out client.py\n"
+            "  python generate_api.py --url http://192.168.1.10:8188\n"
+            "  python generate_api.py --out examples/generated_client.py --examples\n"
+        ),
+    )
+    p.add_argument(
+        "--workflow", "-w",
+        default="workflow_api.json",
+        metavar="PATH",
+        help="Path to the workflow_api.json file  (default: workflow_api.json)",
+    )
+    p.add_argument(
+        "--out", "-o",
+        default="generated_client.py",
+        metavar="PATH",
+        help="Destination path for the generated Python file  (default: generated_client.py)",
+    )
+    p.add_argument(
+        "--url", "-u",
+        default="http://127.0.0.1:8188",
+        metavar="URL",
+        help="Base URL of the running ComfyUI instance  (default: http://127.0.0.1:8188)",
+    )
+    p.add_argument(
+        "--examples",
+        action="store_true",
+        help=(
+            "Also write basic_usage.py and track_progress.py into the same "
+            "directory as --out"
+        ),
+    )
+    return p
+
+
 if __name__ == "__main__":
-    run_dynamic_generator()
+    import argparse
+    args = _build_arg_parser().parse_args()
+    run_dynamic_generator(
+        workflow_path=args.workflow,
+        output_path=args.out,
+        comfyui_url=args.url,
+    )
+    if args.examples:
+        import os, textwrap
+        out_dir = os.path.dirname(os.path.abspath(args.out))
+        client_module = os.path.splitext(os.path.basename(args.out))[0]
+
+        basic = textwrap.dedent(f"""\
+            \"\"\"Basic usage example — submit a prompt and print the prompt_id.\"\"\"
+            import uuid, requests
+            from {client_module} import ComfyWorkflowAPI
+
+            COMFY_URL = "{args.url}"
+
+            api = ComfyWorkflowAPI()
+            payload = api.build_payload()
+            payload["client_id"] = str(uuid.uuid4())
+
+            resp = requests.post(f"{{COMFY_URL}}/prompt", json=payload)
+            resp.raise_for_status()
+            print("Queued prompt:", resp.json()["prompt_id"])
+            """)
+
+        track = textwrap.dedent(f"""\
+            \"\"\"Track generation progress via WebSocket.\"\"\"
+            import uuid, json, websocket, requests
+            from {client_module} import ComfyWorkflowAPI
+
+            COMFY_URL = "{args.url}"
+            WS_URL   = COMFY_URL.replace("http", "ws", 1)
+
+            client_id = str(uuid.uuid4())
+            api = ComfyWorkflowAPI()
+            payload = api.build_payload()
+            payload["client_id"] = client_id
+
+            resp = requests.post(f"{{COMFY_URL}}/prompt", json=payload)
+            resp.raise_for_status()
+            prompt_id = resp.json()["prompt_id"]
+            print(f"Queued: {{prompt_id}}")
+
+            ws = websocket.WebSocket()
+            ws.connect(f"{{WS_URL}}/ws?clientId={{client_id}}")
+            try:
+                while True:
+                    msg = json.loads(ws.recv())
+                    t = msg.get("type")
+                    if t == "progress":
+                        d = msg["data"]
+                        pct = int(d["value"] / d["max"] * 100)
+                        print(f"  Step {{d['value']}}/{{d['max']}}  ({{pct}}%)")
+                    elif t == "execution_success":
+                        print("Done!")
+                        break
+                    elif t == "execution_error":
+                        print("Error:", msg["data"])
+                        break
+            finally:
+                ws.close()
+            """)
+
+        for fname, content in [("basic_usage.py", basic), ("track_progress.py", track)]:
+            dest = os.path.join(out_dir, fname)
+            with open(dest, "w", encoding="utf-8") as fh:
+                fh.write(content)
+            print(f"Written {dest}")
