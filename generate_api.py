@@ -80,6 +80,30 @@ def _get_input_doc(class_type: str, input_name: str, object_info: dict) -> str:
     return ""
 
 
+def _get_input_tooltip(class_type: str, input_name: str, object_info: dict) -> str:
+    """Extract just the tooltip text for an input (no constraint annotation)."""
+    node_schema = object_info.get(class_type, {}).get("input", {})
+    for section in ("required", "optional"):
+        section_data = node_schema.get(section, {})
+        if input_name in section_data:
+            spec = section_data[input_name]
+            meta = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            return meta.get("tooltip", "").rstrip(".")
+    return ""
+
+
+def _get_input_constraints(class_type: str, input_name: str, object_info: dict) -> tuple:
+    """Return (min_val, max_val) for a numeric input, or (None, None)."""
+    node_schema = object_info.get(class_type, {}).get("input", {})
+    for section in ("required", "optional"):
+        section_data = node_schema.get(section, {})
+        if input_name in section_data:
+            spec = section_data[input_name]
+            meta = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            return meta.get("min"), meta.get("max")
+    return None, None
+
+
 def _resolve_type(
     class_type: str,
     input_name: str,
@@ -234,6 +258,7 @@ def run_dynamic_generator(
     args: list[str] = ["        self,", "        *,"]
     assignments: list[str] = []
     doc_entries: list[tuple[str, str]] = []  # [(arg_name, description)]
+    schema_entries: list[dict] = []  # full schema per arg
 
     api_nodes_found = 0
 
@@ -271,6 +296,11 @@ def run_dynamic_generator(
                     if dname == arg_name:
                         doc_entries[i] = (orig_new_name, ddoc)
                         break
+                # Retroactively rename the schema entry for the first occurrence.
+                for i, entry in enumerate(schema_entries):
+                    if entry["name"] == arg_name:
+                        schema_entries[i]["name"] = orig_new_name
+                        break
                 print(
                     f"WARNING: Duplicate argument name '{arg_name}':\n"
                     f"         {orig_origin}\n"
@@ -293,7 +323,21 @@ def run_dynamic_generator(
 
             description = _get_input_doc(class_type, input_name, object_info)
             doc_entries.append((arg_name, description))
-            args.append(f"        {arg_name}: {py_type}{_format_default(input_value, nodes_map)},")
+            tooltip = _get_input_tooltip(class_type, input_name, object_info)
+            mn, mx = _get_input_constraints(class_type, input_name, object_info)
+            default_fmt = _format_default(input_value, nodes_map)
+            default_code = default_fmt[3:] if default_fmt.startswith(" = ") else ""
+            choices = discovered_enums.get(py_type)
+            schema_entries.append({
+                "name": arg_name,
+                "type": py_type,
+                "default_code": default_code,
+                "min": mn,
+                "max": mx,
+                "description": tooltip,
+                "choices": choices,
+            })
+            args.append(f"        {arg_name}: {py_type}{default_fmt},")
             assignments.append(
                 f"        workflow['{node_id}']['inputs']['{input_name}'] = {arg_name}"
             )
@@ -350,6 +394,36 @@ def run_dynamic_generator(
         else:
             code_lines.append("        pass")
 
+    # Emit _RANGES: numeric constraints for runtime validation.
+    code_lines.append("")
+    code_lines.append("# --- Input Range Constraints ---")
+    code_lines.append("_RANGES: Dict[str, Any] = {")
+    for entry in schema_entries:
+        if entry["min"] is not None or entry["max"] is not None:
+            code_lines.append(f"    {repr(entry['name'])}: ({entry['min']!r}, {entry['max']!r}),")
+    code_lines.append("}")
+
+    # Emit _SCHEMA: full parameter descriptions.
+    code_lines.append("")
+    code_lines.append("# --- Parameter Schema ---")
+    code_lines.append("_SCHEMA: Dict[str, Any] = {")
+    for entry in schema_entries:
+        code_lines.append(f"    {repr(entry['name'])}: {{")
+        code_lines.append(f"        'type': {repr(entry['type'])},")
+        if entry["default_code"]:
+            code_lines.append(f"        'default': {entry['default_code']},")
+        if entry["min"] is not None:
+            code_lines.append(f"        'min': {entry['min']!r},")
+        if entry["max"] is not None:
+            code_lines.append(f"        'max': {entry['max']!r},")
+        if entry.get("choices"):
+            joined = ", ".join(repr(c) for c in entry["choices"])
+            code_lines.append(f"        'choices': [{joined}],")
+        if entry["description"]:
+            code_lines.append(f"        'description': {repr(entry['description'])},")
+        code_lines.append("    },")
+    code_lines.append("}")
+
     code_lines.extend(
         [
             "",
@@ -374,6 +448,21 @@ def run_dynamic_generator(
             "    return wrapper",
             "",
             "",
+            "def validate_ranges(func):",
+            '    """Decorator that validates numeric argument ranges at runtime."""',
+            "    @functools.wraps(func)",
+            "    def wrapper(self, *args, **kwargs):",
+            "        for key, val in kwargs.items():",
+            "            if key in _RANGES and isinstance(val, (int, float)):",
+            "                lo, hi = _RANGES[key]",
+            "                if not (lo <= val <= hi):",
+            "                    raise ValueError(",
+            '                        f"Argument \'{key}\' must be between {lo} and {hi}, got {val}"',
+            "                    )",
+            "        return func(self, *args, **kwargs)",
+            "    return wrapper",
+            "",
+            "",
             "class ComfyWorkflowAPI:",
             '    """Type-safe facade over the ComfyUI workflow graph."""',
             "",
@@ -381,7 +470,13 @@ def run_dynamic_generator(
             "        with open(template_path, 'r', encoding='utf-8') as f:",
             "            self.base_workflow = json.load(f)",
             "",
+            "    @classmethod",
+            "    def schema(cls) -> Dict[str, Any]:",
+            '        """Return a machine-readable description of all build_payload parameters."""',
+            "        return _SCHEMA",
+            "",
             "    @validate_connections",
+            "    @validate_ranges",
             "    def build_payload(",
         ]
     )

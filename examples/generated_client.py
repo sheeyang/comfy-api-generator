@@ -41,6 +41,128 @@ class Nodes:
     class SaveImage:  # node 9 · Save Image
         pass
 
+# --- Input Range Constraints ---
+_RANGES: Dict[str, Any] = {
+    'ksampler_seed': (0, 18446744073709551615),
+    'ksampler_steps': (1, 10000),
+    'ksampler_cfg': (0.0, 100.0),
+    'ksampler_denoise': (0.0, 1.0),
+    'empty_latent_image_width': (16, 16384),
+    'empty_latent_image_height': (16, 16384),
+    'empty_latent_image_batch_size': (1, 4096),
+}
+
+# --- Parameter Schema ---
+_SCHEMA: Dict[str, Any] = {
+    'ksampler_seed': {
+        'type': 'int',
+        'default': 156680208700286,
+        'min': 0,
+        'max': 18446744073709551615,
+        'description': 'The random seed used for creating the noise',
+    },
+    'ksampler_steps': {
+        'type': 'int',
+        'default': 20,
+        'min': 1,
+        'max': 10000,
+        'description': 'The number of steps used in the denoising process',
+    },
+    'ksampler_cfg': {
+        'type': 'float',
+        'default': 8,
+        'min': 0.0,
+        'max': 100.0,
+        'description': 'The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality',
+    },
+    'ksampler_sampler_name': {
+        'type': 'KsamplerSamplerName',
+        'default': 'euler',
+        'choices': ['euler', 'euler_cfg_pp', 'euler_ancestral', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'exp_heun_2_x0', 'exp_heun_2_x0_sde', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde_heun', 'dpmpp_2m_sde_heun_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'res_multistep', 'res_multistep_cfg_pp', 'res_multistep_ancestral', 'res_multistep_ancestral_cfg_pp', 'gradient_estimation', 'gradient_estimation_cfg_pp', 'er_sde', 'seeds_2', 'seeds_3', 'sa_solver', 'sa_solver_pece', 'ddim', 'uni_pc', 'uni_pc_bh2'],
+        'description': 'The algorithm used when sampling, this can affect the quality, speed, and style of the generated output',
+    },
+    'ksampler_scheduler': {
+        'type': 'KsamplerScheduler',
+        'default': 'normal',
+        'choices': ['simple', 'sgm_uniform', 'karras', 'exponential', 'ddim_uniform', 'beta', 'normal', 'linear_quadratic', 'kl_optimal'],
+        'description': 'The scheduler controls how noise is gradually removed to form the image',
+    },
+    'ksampler_denoise': {
+        'type': 'float',
+        'default': 1,
+        'min': 0.0,
+        'max': 1.0,
+        'description': 'The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling',
+    },
+    'ksampler_model': {
+        'type': 'Model',
+        'default': Nodes.LoadCheckpoint.MODEL,
+        'description': 'The model used for denoising the input latent',
+    },
+    'ksampler_positive': {
+        'type': 'Conditioning',
+        'default': Nodes.ClipTextEncodePrompt_6.CONDITIONING,
+        'description': 'The conditioning describing the attributes you want to include in the image',
+    },
+    'ksampler_negative': {
+        'type': 'Conditioning',
+        'default': Nodes.ClipTextEncodePrompt_7.CONDITIONING,
+        'description': 'The conditioning describing the attributes you want to exclude from the image',
+    },
+    'ksampler_latent_image': {
+        'type': 'Latent',
+        'default': Nodes.EmptyLatentImage.LATENT,
+        'description': 'The latent image to denoise',
+    },
+    'load_checkpoint_ckpt_name': {
+        'type': 'LoadCheckpointCkptName',
+        'default': 'v1-5-pruned-emaonly-fp16.safetensors',
+        'choices': ['SD1.5\\v1-5-pruned-emaonly.safetensors'],
+        'description': 'The name of the checkpoint (model) to load',
+    },
+    'empty_latent_image_width': {
+        'type': 'int',
+        'default': 512,
+        'min': 16,
+        'max': 16384,
+        'description': 'The width of the latent images in pixels',
+    },
+    'empty_latent_image_height': {
+        'type': 'int',
+        'default': 512,
+        'min': 16,
+        'max': 16384,
+        'description': 'The height of the latent images in pixels',
+    },
+    'empty_latent_image_batch_size': {
+        'type': 'int',
+        'default': 1,
+        'min': 1,
+        'max': 4096,
+        'description': 'The number of latent images in the batch',
+    },
+    'clip_text_encode__prompt__text_6': {
+        'type': 'str',
+        'default': 'beautiful scenery nature glass bottle landscape, , purple galaxy bottle,',
+        'description': 'The text to be encoded',
+    },
+    'clip_text_encode__prompt__clip_6': {
+        'type': 'Clip',
+        'default': Nodes.LoadCheckpoint.CLIP,
+        'description': 'The CLIP model used for encoding the text',
+    },
+    'clip_text_encode__prompt__text_7': {
+        'type': 'str',
+        'default': 'text, watermark',
+        'description': 'The text to be encoded',
+    },
+    'clip_text_encode__prompt__clip_7': {
+        'type': 'Clip',
+        'default': Nodes.LoadCheckpoint.CLIP,
+        'description': 'The CLIP model used for encoding the text',
+    },
+}
+
 
 # --- Runtime Validation ---
 def validate_connections(func):
@@ -61,6 +183,21 @@ def validate_connections(func):
     return wrapper
 
 
+def validate_ranges(func):
+    """Decorator that validates numeric argument ranges at runtime."""
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        for key, val in kwargs.items():
+            if key in _RANGES and isinstance(val, (int, float)):
+                lo, hi = _RANGES[key]
+                if not (lo <= val <= hi):
+                    raise ValueError(
+                        f"Argument '{key}' must be between {lo} and {hi}, got {val}"
+                    )
+        return func(self, *args, **kwargs)
+    return wrapper
+
+
 class ComfyWorkflowAPI:
     """Type-safe facade over the ComfyUI workflow graph."""
 
@@ -68,7 +205,13 @@ class ComfyWorkflowAPI:
         with open(template_path, 'r', encoding='utf-8') as f:
             self.base_workflow = json.load(f)
 
+    @classmethod
+    def schema(cls) -> Dict[str, Any]:
+        """Return a machine-readable description of all build_payload parameters."""
+        return _SCHEMA
+
     @validate_connections
+    @validate_ranges
     def build_payload(
         self,
         *,
