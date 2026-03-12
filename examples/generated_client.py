@@ -98,21 +98,25 @@ _SCHEMA: Dict[str, Any] = {
         'type': 'Model',
         'default': Nodes.LoadCheckpoint.MODEL,
         'description': 'The model used for denoising the input latent',
+        'comfy_type': 'MODEL',
     },
     'ksampler_positive': {
         'type': 'Conditioning',
         'default': Nodes.ClipTextEncodePrompt_6.CONDITIONING,
         'description': 'The conditioning describing the attributes you want to include in the image',
+        'comfy_type': 'CONDITIONING',
     },
     'ksampler_negative': {
         'type': 'Conditioning',
         'default': Nodes.ClipTextEncodePrompt_7.CONDITIONING,
         'description': 'The conditioning describing the attributes you want to exclude from the image',
+        'comfy_type': 'CONDITIONING',
     },
     'ksampler_latent_image': {
         'type': 'Latent',
         'default': Nodes.EmptyLatentImage.LATENT,
         'description': 'The latent image to denoise',
+        'comfy_type': 'LATENT',
     },
     'load_checkpoint_ckpt_name': {
         'type': 'LoadCheckpointCkptName',
@@ -150,6 +154,7 @@ _SCHEMA: Dict[str, Any] = {
         'type': 'Clip',
         'default': Nodes.LoadCheckpoint.CLIP,
         'description': 'The CLIP model used for encoding the text',
+        'comfy_type': 'CLIP',
     },
     'clip_text_encode__prompt__text_7': {
         'type': 'str',
@@ -160,13 +165,26 @@ _SCHEMA: Dict[str, Any] = {
         'type': 'Clip',
         'default': Nodes.LoadCheckpoint.CLIP,
         'description': 'The CLIP model used for encoding the text',
+        'comfy_type': 'CLIP',
     },
+}
+
+# --- Node Output Types (for connection provenance validation) ---
+_OUTPUT_TYPES: Dict[Tuple[str, int], str] = {
+    ('3', 0): 'LATENT',
+    ('4', 0): 'MODEL',
+    ('4', 1): 'CLIP',
+    ('4', 2): 'VAE',
+    ('5', 0): 'LATENT',
+    ('6', 0): 'CONDITIONING',
+    ('7', 0): 'CONDITIONING',
+    ('8', 0): 'IMAGE',
 }
 
 
 # --- Runtime Validation ---
 def validate_connections(func):
-    """Decorator that validates all ComfyConnection tuples at runtime."""
+    """Decorator: validates ComfyConnection shape and type provenance at runtime."""
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         for key, val in kwargs.items():
@@ -179,6 +197,14 @@ def validate_connections(func):
                     raise ValueError(
                         f"Argument '{key}' expected (NodeID: str, OutputIndex: int), got {val}"
                     )
+                expected_type = _SCHEMA.get(key, {}).get('comfy_type')
+                if expected_type:
+                    actual_type = _OUTPUT_TYPES.get((val[0], val[1]))
+                    if actual_type and actual_type != expected_type:
+                        raise ValueError(
+                            f"Argument '{key}' expects a {expected_type!r} connection, "
+                            f"but node {val[0]!r} output {val[1]} produces {actual_type!r}"
+                        )
         return func(self, *args, **kwargs)
     return wrapper
 
@@ -198,6 +224,20 @@ def validate_ranges(func):
     return wrapper
 
 
+def validate_enums(func):
+    """Decorator that validates Literal/enum argument choices at runtime."""
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        for key, val in kwargs.items():
+            choices = _SCHEMA.get(key, {}).get('choices')
+            if choices is not None and val not in choices:
+                raise ValueError(
+                    f"Argument '{key}' must be one of {choices!r}, got {val!r}"
+                )
+        return func(self, *args, **kwargs)
+    return wrapper
+
+
 class ComfyWorkflowAPI:
     """Type-safe facade over the ComfyUI workflow graph."""
 
@@ -212,6 +252,7 @@ class ComfyWorkflowAPI:
 
     @validate_connections
     @validate_ranges
+    @validate_enums
     def build_payload(
         self,
         *,

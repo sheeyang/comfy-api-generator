@@ -234,13 +234,19 @@ def run_dynamic_generator(
         class_name = _title_to_class_name(title, node_id, seen_class_names, nodes_map)
 
         raw_output_names = object_info.get(class_type, {}).get("output_name", [])
+        raw_output_types = object_info.get(class_type, {}).get("output", [])
         if raw_output_names:
             slots = [s.upper() if s else f"OUT_{i}" for i, s in enumerate(raw_output_names)]
         else:
-            output_count = len(object_info.get(class_type, {}).get("output", []))
+            output_count = len(raw_output_types)
             slots = [f"OUT_{i}" for i in range(output_count)]
 
-        nodes_map[node_id] = {"class_name": class_name, "title": title, "slots": slots}
+        nodes_map[node_id] = {
+            "class_name": class_name,
+            "title": title,
+            "slots": slots,
+            "output_types": list(raw_output_types),
+        }
 
     # ------------------------------------------------------------------
     # 4. Iterate over API-exposed nodes and resolve types
@@ -328,6 +334,15 @@ def run_dynamic_generator(
             default_fmt = _format_default(input_value, nodes_map)
             default_code = default_fmt[3:] if default_fmt.startswith(" = ") else ""
             choices = discovered_enums.get(py_type)
+            # Resolve raw ComfyUI type for connection provenance validation.
+            _raw_comfy_type = None
+            _input_sec = object_info.get(class_type, {}).get("input", {})
+            for _sec in ("required", "optional"):
+                if input_name in _input_sec.get(_sec, {}):
+                    _ct = _input_sec[_sec][input_name][0]
+                    if isinstance(_ct, str) and _ct not in PRIMITIVES:
+                        _raw_comfy_type = _ct
+                    break
             schema_entries.append({
                 "name": arg_name,
                 "type": py_type,
@@ -336,6 +351,7 @@ def run_dynamic_generator(
                 "max": mx,
                 "description": tooltip,
                 "choices": choices,
+                "comfy_type": _raw_comfy_type,
             })
             args.append(f"        {arg_name}: {py_type}{default_fmt},")
             assignments.append(
@@ -421,7 +437,19 @@ def run_dynamic_generator(
             code_lines.append(f"        'choices': [{joined}],")
         if entry["description"]:
             code_lines.append(f"        'description': {repr(entry['description'])},")
+        if entry.get("comfy_type"):
+            code_lines.append(f"        'comfy_type': {repr(entry['comfy_type'])},")
         code_lines.append("    },")
+    code_lines.append("}")
+
+    # Emit _OUTPUT_TYPES: maps (node_id, slot_index) → raw ComfyUI output type.
+    code_lines.append("")
+    code_lines.append("# --- Node Output Types (for connection provenance validation) ---")
+    code_lines.append("_OUTPUT_TYPES: Dict[Tuple[str, int], str] = {")
+    for nid, ninfo in nodes_map.items():
+        for idx, otype in enumerate(ninfo.get("output_types", [])):
+            if isinstance(otype, str):
+                code_lines.append(f"    ({repr(nid)}, {idx}): {repr(otype)},")
     code_lines.append("}")
 
     code_lines.extend(
@@ -430,7 +458,7 @@ def run_dynamic_generator(
             "",
             "# --- Runtime Validation ---",
             "def validate_connections(func):",
-            '    """Decorator that validates all ComfyConnection tuples at runtime."""',
+            '    """Decorator: validates ComfyConnection shape and type provenance at runtime."""',
             "    @functools.wraps(func)",
             "    def wrapper(self, *args, **kwargs):",
             "        for key, val in kwargs.items():",
@@ -444,6 +472,14 @@ def run_dynamic_generator(
             '                        f"Argument \'{key}\' expected '
             "(NodeID: str, OutputIndex: int), got {val}\"",
             "                    )",
+            "                expected_type = _SCHEMA.get(key, {}).get('comfy_type')",
+            "                if expected_type:",
+            "                    actual_type = _OUTPUT_TYPES.get((val[0], val[1]))",
+            "                    if actual_type and actual_type != expected_type:",
+            "                        raise ValueError(",
+            "                            f\"Argument '{key}' expects a {expected_type!r} connection, \"",
+            "                            f\"but node {val[0]!r} output {val[1]} produces {actual_type!r}\"",
+            "                        )",
             "        return func(self, *args, **kwargs)",
             "    return wrapper",
             "",
@@ -463,6 +499,20 @@ def run_dynamic_generator(
             "    return wrapper",
             "",
             "",
+            "def validate_enums(func):",
+            '    """Decorator that validates Literal/enum argument choices at runtime."""',
+            "    @functools.wraps(func)",
+            "    def wrapper(self, *args, **kwargs):",
+            "        for key, val in kwargs.items():",
+            "            choices = _SCHEMA.get(key, {}).get('choices')",
+            "            if choices is not None and val not in choices:",
+            "                raise ValueError(",
+            "                    f\"Argument '{key}' must be one of {choices!r}, got {val!r}\"",
+            "                )",
+            "        return func(self, *args, **kwargs)",
+            "    return wrapper",
+            "",
+            "",
             "class ComfyWorkflowAPI:",
             '    """Type-safe facade over the ComfyUI workflow graph."""',
             "",
@@ -477,6 +527,7 @@ def run_dynamic_generator(
             "",
             "    @validate_connections",
             "    @validate_ranges",
+            "    @validate_enums",
             "    def build_payload(",
         ]
     )
