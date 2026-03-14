@@ -786,6 +786,22 @@ def run_dynamic_generator(
         )
         code_lines.append("        {'type': 'execution_success', 'prompt_id': str}")
         code_lines.append("        {'type': 'execution_error',   'detail': dict}")
+        code_lines.append(
+            "        {'type': 'outputs',           'prompt_id': str, 'files': list[dict]}"
+        )
+        code_lines.append("")
+        code_lines.append(
+            "    The 'outputs' event is yielded after 'execution_success' and contains"
+        )
+        code_lines.append(
+            "    all output files produced by the workflow. Each entry in 'files' is a"
+        )
+        code_lines.append(
+            "    dict with keys: 'filename' (str), 'subfolder' (str), 'type' (str)."
+        )
+        code_lines.append(
+            "    A single prompt can produce multiple files (e.g. a batch of images)."
+        )
         code_lines.append("")
         code_lines.append("    Args:")
         code_lines.append("        payload: The dict returned by build_payload().")
@@ -832,6 +848,34 @@ def run_dynamic_generator(
         )
         code_lines.append(
             "                        yield {'type': 'execution_success', 'prompt_id': prompt_id}"
+        )
+        code_lines.append("                        async with session.get(")
+        code_lines.append(
+            "                            f'{comfyui_url}/history/{prompt_id}'"
+        )
+        code_lines.append("                        ) as hist_resp:")
+        code_lines.append("                            hist_resp.raise_for_status()")
+        code_lines.append("                            hist = await hist_resp.json()")
+        code_lines.append(
+            "                        outputs = hist.get(prompt_id, {}).get('outputs', {})"
+        )
+        code_lines.append("                        files: list[dict] = []")
+        code_lines.append(
+            "                        for node_output in outputs.values():"
+        )
+        code_lines.append(
+            "                            for key, items in node_output.items():"
+        )
+        code_lines.append("                                if isinstance(items, list):")
+        code_lines.append("                                    for item in items:")
+        code_lines.append(
+            "                                        if isinstance(item, dict) and 'filename' in item:"
+        )
+        code_lines.append(
+            "                                            files.append(item)"
+        )
+        code_lines.append(
+            "                        yield {'type': 'outputs', 'prompt_id': prompt_id, 'files': files}"
         )
         code_lines.append("                        return")
         code_lines.append("                elif etype == 'progress':")
