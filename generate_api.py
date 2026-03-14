@@ -317,8 +317,8 @@ def run_dynamic_generator(
     discovered_custom_types: set[str] = set()
     discovered_enums: dict[str, list[str]] = {}
     seen_arg_names: dict[str, tuple] = {}  # arg_name -> (origin_str, node_id)
-    args: list[str] = ["        self,", "        *,"]
-    assignments: list[str] = []
+    arg_entries: list[dict] = []  # {"name", "type", "default"}
+    assignment_entries: list[dict] = []  # {"node_id", "input_name", "arg_name"}
     doc_entries: list[tuple[str, str]] = []  # [(arg_name, description)]
     schema_entries: list[dict] = []  # full schema per arg
 
@@ -342,18 +342,14 @@ def run_dynamic_generator(
                 orig_new_name = f"{arg_name}_{orig_node_id}"
                 new_arg_name = f"{arg_name}_{node_id}"
 
-                # Retroactively rename the first occurrence in args and assignments.
-                for i, line in enumerate(args):
-                    if f"        {arg_name}:" in line:
-                        args[i] = line.replace(
-                            f"        {arg_name}:", f"        {orig_new_name}:", 1
-                        )
+                # Retroactively rename the first occurrence in arg_entries and assignment_entries.
+                for entry in arg_entries:
+                    if entry["name"] == arg_name:
+                        entry["name"] = orig_new_name
                         break
-                for i, line in enumerate(assignments):
-                    if f"] = {arg_name}" in line:
-                        assignments[i] = line.replace(
-                            f"] = {arg_name}", f"] = {orig_new_name}", 1
-                        )
+                for entry in assignment_entries:
+                    if entry["arg_name"] == arg_name:
+                        entry["arg_name"] = orig_new_name
                         break
 
                 seen_arg_names[orig_new_name] = (orig_origin, orig_node_id)
@@ -433,9 +429,11 @@ def run_dynamic_generator(
                     "comfy_type": _raw_comfy_type,
                 }
             )
-            args.append(f"        {arg_name}: {py_type}{default_fmt},")
-            assignments.append(
-                f"        workflow['{node_id}']['inputs']['{input_name}'] = {arg_name}"
+            arg_entries.append(
+                {"name": arg_name, "type": py_type, "default": default_fmt}
+            )
+            assignment_entries.append(
+                {"node_id": node_id, "input_name": input_name, "arg_name": arg_name}
             )
 
     if api_nodes_found == 0:
@@ -706,6 +704,10 @@ def run_dynamic_generator(
 
     code_lines.append("    def build_payload(")
 
+    # Render arg_entries → parameter strings
+    args = ["        self,", "        *,"] + [
+        f"        {e['name']}: {e['type']}{e['default']}," for e in arg_entries
+    ]
     code_lines.extend(args)
     code_lines.append("    ) -> Dict[str, Any]:")
     # Build multi-line docstring with Args section.
@@ -724,6 +726,11 @@ def run_dynamic_generator(
     code_lines.append(
         "            workflow[_id] = {**_node, 'inputs': dict(_node.get('inputs', {}))}"
     )
+    # Render assignment_entries → assignment strings
+    assignments = [
+        f"        workflow['{e['node_id']}']['inputs']['{e['input_name']}'] = {e['arg_name']}"
+        for e in assignment_entries
+    ]
     code_lines.extend(assignments)
     code_lines.append("        return {'prompt': workflow}")
     code_lines.append("")  # trailing newline
