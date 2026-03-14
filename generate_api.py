@@ -658,7 +658,7 @@ def run_dynamic_generator(
             "",
             "    __slots__ = ('base_workflow', '_template_path')",
             "",
-            f"    def __init__(self, template_path: str = '{workflow_path}') -> None:",
+            f"    def __init__(self, template_path: str = {repr(workflow_path)}) -> None:",
             "        with open(template_path, 'r', encoding='utf-8') as f:",
             "            self.base_workflow = json.load(f)",
             "        self._template_path = template_path",

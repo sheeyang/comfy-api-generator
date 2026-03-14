@@ -17,13 +17,15 @@ Model = NewType('Model', ComfyConnection)
 
 # --- Auto-Generated Enum Types (dropdown choices) ---
 KsamplerSamplerName = Literal['euler', 'euler_cfg_pp', 'euler_ancestral', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'exp_heun_2_x0', 'exp_heun_2_x0_sde', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde_heun', 'dpmpp_2m_sde_heun_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'res_multistep', 'res_multistep_cfg_pp', 'res_multistep_ancestral', 'res_multistep_ancestral_cfg_pp', 'gradient_estimation', 'gradient_estimation_cfg_pp', 'er_sde', 'seeds_2', 'seeds_3', 'sa_solver', 'sa_solver_pece', 'ddim', 'uni_pc', 'uni_pc_bh2']
+KsamplerSamplerName11 = Literal['euler', 'euler_cfg_pp', 'euler_ancestral', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'exp_heun_2_x0', 'exp_heun_2_x0_sde', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde_heun', 'dpmpp_2m_sde_heun_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'res_multistep', 'res_multistep_cfg_pp', 'res_multistep_ancestral', 'res_multistep_ancestral_cfg_pp', 'gradient_estimation', 'gradient_estimation_cfg_pp', 'er_sde', 'seeds_2', 'seeds_3', 'sa_solver', 'sa_solver_pece', 'ddim', 'uni_pc', 'uni_pc_bh2']
 KsamplerScheduler = Literal['simple', 'sgm_uniform', 'karras', 'exponential', 'ddim_uniform', 'beta', 'normal', 'linear_quadratic', 'kl_optimal']
+KsamplerScheduler11 = Literal['simple', 'sgm_uniform', 'karras', 'exponential', 'ddim_uniform', 'beta', 'normal', 'linear_quadratic', 'kl_optimal']
 LoadCheckpointCkptName = Literal['SD1.5\\v1-5-pruned-emaonly.safetensors']
 
 
 # --- Workflow Node Connections ---
 class Nodes:
-    class Ksampler:  # node 3 · API_KSampler
+    class Ksampler_3:  # node 3 · API_KSampler
         LATENT = ('3', 0)
     class LoadCheckpoint:  # node 4 · API_Load Checkpoint
         MODEL = ('4', 0)
@@ -35,83 +37,95 @@ class Nodes:
         CONDITIONING = ('6', 0)
     class ClipTextEncodePrompt_7:  # node 7 · API_CLIP Text Encode (Prompt)
         CONDITIONING = ('7', 0)
-    class VaeDecode:  # node 8 · VAE Decode
+    class VaeDecode_8:  # node 8 · VAE Decode
         IMAGE = ('8', 0)
-    class SaveImage:  # node 9 · Save Image
+    class SaveImage_9:  # node 9 · Save Image
         pass
+    class ClipTextEncodePrompt:  # node 10 · API_CLIP Text Encode (Prompt)
+        CONDITIONING = ('10', 0)
+    class Ksampler_11:  # node 11 · API_KSampler
+        LATENT = ('11', 0)
+    class SaveImage_12:  # node 12 · Save Image
+        pass
+    class VaeDecode_13:  # node 13 · VAE Decode
+        IMAGE = ('13', 0)
 
 # --- Input Range Constraints ---
 _RANGES: Dict[str, Any] = {
-    'ksampler_seed': (0, 18446744073709551615),
-    'ksampler_steps': (1, 10000),
-    'ksampler_cfg': (0.0, 100.0),
-    'ksampler_denoise': (0.0, 1.0),
+    'ksampler_seed_3': (0, 18446744073709551615),
+    'ksampler_steps_3': (1, 10000),
+    'ksampler_cfg_3': (0.0, 100.0),
+    'ksampler_denoise_3': (0.0, 1.0),
     'empty_latent_image_width': (16, 16384),
     'empty_latent_image_height': (16, 16384),
     'empty_latent_image_batch_size': (1, 4096),
+    'ksampler_seed_11': (0, 18446744073709551615),
+    'ksampler_steps_11': (1, 10000),
+    'ksampler_cfg_11': (0.0, 100.0),
+    'ksampler_denoise_11': (0.0, 1.0),
 }
 
 # --- Parameter Schema ---
 _SCHEMA: Dict[str, Any] = {
-    'ksampler_seed': {
+    'ksampler_seed_3': {
         'type': 'int',
-        'default': 156680208700286,
+        'default': 742720145737355,
         'min': 0,
         'max': 18446744073709551615,
         'description': 'The random seed used for creating the noise',
     },
-    'ksampler_steps': {
+    'ksampler_steps_3': {
         'type': 'int',
         'default': 20,
         'min': 1,
         'max': 10000,
         'description': 'The number of steps used in the denoising process',
     },
-    'ksampler_cfg': {
+    'ksampler_cfg_3': {
         'type': 'float',
         'default': 8,
         'min': 0.0,
         'max': 100.0,
         'description': 'The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality',
     },
-    'ksampler_sampler_name': {
+    'ksampler_sampler_name_3': {
         'type': 'KsamplerSamplerName',
         'default': 'euler',
         'choices': ['euler', 'euler_cfg_pp', 'euler_ancestral', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'exp_heun_2_x0', 'exp_heun_2_x0_sde', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde_heun', 'dpmpp_2m_sde_heun_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'res_multistep', 'res_multistep_cfg_pp', 'res_multistep_ancestral', 'res_multistep_ancestral_cfg_pp', 'gradient_estimation', 'gradient_estimation_cfg_pp', 'er_sde', 'seeds_2', 'seeds_3', 'sa_solver', 'sa_solver_pece', 'ddim', 'uni_pc', 'uni_pc_bh2'],
         'description': 'The algorithm used when sampling, this can affect the quality, speed, and style of the generated output',
     },
-    'ksampler_scheduler': {
+    'ksampler_scheduler_3': {
         'type': 'KsamplerScheduler',
         'default': 'normal',
         'choices': ['simple', 'sgm_uniform', 'karras', 'exponential', 'ddim_uniform', 'beta', 'normal', 'linear_quadratic', 'kl_optimal'],
         'description': 'The scheduler controls how noise is gradually removed to form the image',
     },
-    'ksampler_denoise': {
+    'ksampler_denoise_3': {
         'type': 'float',
         'default': 1,
         'min': 0.0,
         'max': 1.0,
         'description': 'The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling',
     },
-    'ksampler_model': {
+    'ksampler_model_3': {
         'type': 'Model',
         'default': Nodes.LoadCheckpoint.MODEL,
         'description': 'The model used for denoising the input latent',
         'comfy_type': 'MODEL',
     },
-    'ksampler_positive': {
+    'ksampler_positive_3': {
         'type': 'Conditioning',
         'default': Nodes.ClipTextEncodePrompt_6.CONDITIONING,
         'description': 'The conditioning describing the attributes you want to include in the image',
         'comfy_type': 'CONDITIONING',
     },
-    'ksampler_negative': {
+    'ksampler_negative_3': {
         'type': 'Conditioning',
         'default': Nodes.ClipTextEncodePrompt_7.CONDITIONING,
         'description': 'The conditioning describing the attributes you want to exclude from the image',
         'comfy_type': 'CONDITIONING',
     },
-    'ksampler_latent_image': {
+    'ksampler_latent_image_3': {
         'type': 'Latent',
         'default': Nodes.EmptyLatentImage.LATENT,
         'description': 'The latent image to denoise',
@@ -119,7 +133,7 @@ _SCHEMA: Dict[str, Any] = {
     },
     'load_checkpoint_ckpt_name': {
         'type': 'LoadCheckpointCkptName',
-        'default': 'v1-5-pruned-emaonly-fp16.safetensors',
+        'default': 'SD1.5\\v1-5-pruned-emaonly.safetensors',
         'choices': ['SD1.5\\v1-5-pruned-emaonly.safetensors'],
         'description': 'The name of the checkpoint (model) to load',
     },
@@ -166,6 +180,81 @@ _SCHEMA: Dict[str, Any] = {
         'description': 'The CLIP model used for encoding the text',
         'comfy_type': 'CLIP',
     },
+    'clip_text_encode__prompt__text': {
+        'type': 'str',
+        'default': 'pink',
+        'description': 'The text to be encoded',
+    },
+    'clip_text_encode__prompt__clip': {
+        'type': 'Clip',
+        'default': Nodes.LoadCheckpoint.CLIP,
+        'description': 'The CLIP model used for encoding the text',
+        'comfy_type': 'CLIP',
+    },
+    'ksampler_seed_11': {
+        'type': 'int',
+        'default': 826798260582164,
+        'min': 0,
+        'max': 18446744073709551615,
+        'description': 'The random seed used for creating the noise',
+    },
+    'ksampler_steps_11': {
+        'type': 'int',
+        'default': 20,
+        'min': 1,
+        'max': 10000,
+        'description': 'The number of steps used in the denoising process',
+    },
+    'ksampler_cfg_11': {
+        'type': 'float',
+        'default': 8,
+        'min': 0.0,
+        'max': 100.0,
+        'description': 'The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality',
+    },
+    'ksampler_sampler_name_11': {
+        'type': 'KsamplerSamplerName11',
+        'default': 'euler',
+        'choices': ['euler', 'euler_cfg_pp', 'euler_ancestral', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'exp_heun_2_x0', 'exp_heun_2_x0_sde', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_2m_sde_heun', 'dpmpp_2m_sde_heun_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'res_multistep', 'res_multistep_cfg_pp', 'res_multistep_ancestral', 'res_multistep_ancestral_cfg_pp', 'gradient_estimation', 'gradient_estimation_cfg_pp', 'er_sde', 'seeds_2', 'seeds_3', 'sa_solver', 'sa_solver_pece', 'ddim', 'uni_pc', 'uni_pc_bh2'],
+        'description': 'The algorithm used when sampling, this can affect the quality, speed, and style of the generated output',
+    },
+    'ksampler_scheduler_11': {
+        'type': 'KsamplerScheduler11',
+        'default': 'normal',
+        'choices': ['simple', 'sgm_uniform', 'karras', 'exponential', 'ddim_uniform', 'beta', 'normal', 'linear_quadratic', 'kl_optimal'],
+        'description': 'The scheduler controls how noise is gradually removed to form the image',
+    },
+    'ksampler_denoise_11': {
+        'type': 'float',
+        'default': 1,
+        'min': 0.0,
+        'max': 1.0,
+        'description': 'The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling',
+    },
+    'ksampler_model_11': {
+        'type': 'Model',
+        'default': Nodes.LoadCheckpoint.MODEL,
+        'description': 'The model used for denoising the input latent',
+        'comfy_type': 'MODEL',
+    },
+    'ksampler_positive_11': {
+        'type': 'Conditioning',
+        'default': Nodes.ClipTextEncodePrompt.CONDITIONING,
+        'description': 'The conditioning describing the attributes you want to include in the image',
+        'comfy_type': 'CONDITIONING',
+    },
+    'ksampler_negative_11': {
+        'type': 'Conditioning',
+        'default': Nodes.ClipTextEncodePrompt_7.CONDITIONING,
+        'description': 'The conditioning describing the attributes you want to exclude from the image',
+        'comfy_type': 'CONDITIONING',
+    },
+    'ksampler_latent_image_11': {
+        'type': 'Latent',
+        'default': Nodes.Ksampler_3.LATENT,
+        'description': 'The latent image to denoise',
+        'comfy_type': 'LATENT',
+    },
 }
 
 # --- Node Output Types (for connection provenance validation) ---
@@ -178,6 +267,9 @@ _OUTPUT_TYPES: Dict[Tuple[str, int], str] = {
     ('6', 0): 'CONDITIONING',
     ('7', 0): 'CONDITIONING',
     ('8', 0): 'IMAGE',
+    ('10', 0): 'CONDITIONING',
+    ('11', 0): 'LATENT',
+    ('13', 0): 'IMAGE',
 }
 
 
@@ -252,13 +344,13 @@ class ComfyWorkflowAPI:
 
     __slots__ = ('base_workflow', '_template_path')
 
-    def __init__(self, template_path: str = 'workflow_api.json') -> None:
+    def __init__(self, template_path: str = '.\\three_dupe_example.json') -> None:
         with open(template_path, 'r', encoding='utf-8') as f:
             self.base_workflow = json.load(f)
         self._template_path = template_path
 
     def __repr__(self) -> str:
-        return f"ComfyWorkflowAPI(template={self._template_path!r}, params=18)"
+        return f"ComfyWorkflowAPI(template={self._template_path!r}, params=30)"
 
     @classmethod
     def schema(cls) -> Dict[str, Any]:
@@ -281,17 +373,17 @@ class ComfyWorkflowAPI:
     def build_payload(
         self,
         *,
-        ksampler_seed: int = 156680208700286,
-        ksampler_steps: int = 20,
-        ksampler_cfg: float = 8,
-        ksampler_sampler_name: KsamplerSamplerName = 'euler',
-        ksampler_scheduler: KsamplerScheduler = 'normal',
-        ksampler_denoise: float = 1,
-        ksampler_model: Model = Nodes.LoadCheckpoint.MODEL,
-        ksampler_positive: Conditioning = Nodes.ClipTextEncodePrompt_6.CONDITIONING,
-        ksampler_negative: Conditioning = Nodes.ClipTextEncodePrompt_7.CONDITIONING,
-        ksampler_latent_image: Latent = Nodes.EmptyLatentImage.LATENT,
-        load_checkpoint_ckpt_name: LoadCheckpointCkptName = 'v1-5-pruned-emaonly-fp16.safetensors',
+        ksampler_seed_3: int = 742720145737355,
+        ksampler_steps_3: int = 20,
+        ksampler_cfg_3: float = 8,
+        ksampler_sampler_name_3: KsamplerSamplerName = 'euler',
+        ksampler_scheduler_3: KsamplerScheduler = 'normal',
+        ksampler_denoise_3: float = 1,
+        ksampler_model_3: Model = Nodes.LoadCheckpoint.MODEL,
+        ksampler_positive_3: Conditioning = Nodes.ClipTextEncodePrompt_6.CONDITIONING,
+        ksampler_negative_3: Conditioning = Nodes.ClipTextEncodePrompt_7.CONDITIONING,
+        ksampler_latent_image_3: Latent = Nodes.EmptyLatentImage.LATENT,
+        load_checkpoint_ckpt_name: LoadCheckpointCkptName = 'SD1.5\\v1-5-pruned-emaonly.safetensors',
         empty_latent_image_width: int = 512,
         empty_latent_image_height: int = 512,
         empty_latent_image_batch_size: int = 1,
@@ -299,20 +391,32 @@ class ComfyWorkflowAPI:
         clip_text_encode__prompt__clip_6: Clip = Nodes.LoadCheckpoint.CLIP,
         clip_text_encode__prompt__text_7: str = 'text, watermark',
         clip_text_encode__prompt__clip_7: Clip = Nodes.LoadCheckpoint.CLIP,
+        clip_text_encode__prompt__text: str = 'pink',
+        clip_text_encode__prompt__clip: Clip = Nodes.LoadCheckpoint.CLIP,
+        ksampler_seed_11: int = 826798260582164,
+        ksampler_steps_11: int = 20,
+        ksampler_cfg_11: float = 8,
+        ksampler_sampler_name_11: KsamplerSamplerName11 = 'euler',
+        ksampler_scheduler_11: KsamplerScheduler11 = 'normal',
+        ksampler_denoise_11: float = 1,
+        ksampler_model_11: Model = Nodes.LoadCheckpoint.MODEL,
+        ksampler_positive_11: Conditioning = Nodes.ClipTextEncodePrompt.CONDITIONING,
+        ksampler_negative_11: Conditioning = Nodes.ClipTextEncodePrompt_7.CONDITIONING,
+        ksampler_latent_image_11: Latent = Nodes.Ksampler_3.LATENT,
     ) -> Dict[str, Any]:
         """Build a ready-to-submit ComfyUI prompt payload.
 
         Args:
-            ksampler_seed: The random seed used for creating the noise [min=0, max=18446744073709551615].
-            ksampler_steps: The number of steps used in the denoising process [min=1, max=10000].
-            ksampler_cfg: The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality [min=0.0, max=100.0].
-            ksampler_sampler_name: The algorithm used when sampling, this can affect the quality, speed, and style of the generated output.
-            ksampler_scheduler: The scheduler controls how noise is gradually removed to form the image.
-            ksampler_denoise: The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling [min=0.0, max=1.0].
-            ksampler_model: The model used for denoising the input latent.
-            ksampler_positive: The conditioning describing the attributes you want to include in the image.
-            ksampler_negative: The conditioning describing the attributes you want to exclude from the image.
-            ksampler_latent_image: The latent image to denoise.
+            ksampler_seed_3: The random seed used for creating the noise [min=0, max=18446744073709551615].
+            ksampler_steps_3: The number of steps used in the denoising process [min=1, max=10000].
+            ksampler_cfg_3: The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality [min=0.0, max=100.0].
+            ksampler_sampler_name_3: The algorithm used when sampling, this can affect the quality, speed, and style of the generated output.
+            ksampler_scheduler_3: The scheduler controls how noise is gradually removed to form the image.
+            ksampler_denoise_3: The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling [min=0.0, max=1.0].
+            ksampler_model_3: The model used for denoising the input latent.
+            ksampler_positive_3: The conditioning describing the attributes you want to include in the image.
+            ksampler_negative_3: The conditioning describing the attributes you want to exclude from the image.
+            ksampler_latent_image_3: The latent image to denoise.
             load_checkpoint_ckpt_name: The name of the checkpoint (model) to load.
             empty_latent_image_width: The width of the latent images in pixels [min=16, max=16384].
             empty_latent_image_height: The height of the latent images in pixels [min=16, max=16384].
@@ -321,20 +425,32 @@ class ComfyWorkflowAPI:
             clip_text_encode__prompt__clip_6: The CLIP model used for encoding the text.
             clip_text_encode__prompt__text_7: The text to be encoded.
             clip_text_encode__prompt__clip_7: The CLIP model used for encoding the text.
+            clip_text_encode__prompt__text: The text to be encoded.
+            clip_text_encode__prompt__clip: The CLIP model used for encoding the text.
+            ksampler_seed_11: The random seed used for creating the noise [min=0, max=18446744073709551615].
+            ksampler_steps_11: The number of steps used in the denoising process [min=1, max=10000].
+            ksampler_cfg_11: The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality [min=0.0, max=100.0].
+            ksampler_sampler_name_11: The algorithm used when sampling, this can affect the quality, speed, and style of the generated output.
+            ksampler_scheduler_11: The scheduler controls how noise is gradually removed to form the image.
+            ksampler_denoise_11: The amount of denoising applied, lower values will maintain the structure of the initial image allowing for image to image sampling [min=0.0, max=1.0].
+            ksampler_model_11: The model used for denoising the input latent.
+            ksampler_positive_11: The conditioning describing the attributes you want to include in the image.
+            ksampler_negative_11: The conditioning describing the attributes you want to exclude from the image.
+            ksampler_latent_image_11: The latent image to denoise.
         """
         workflow = {}
         for _id, _node in self.base_workflow.items():
             workflow[_id] = {**_node, 'inputs': dict(_node.get('inputs', {}))}
-        workflow['3']['inputs']['seed'] = ksampler_seed
-        workflow['3']['inputs']['steps'] = ksampler_steps
-        workflow['3']['inputs']['cfg'] = ksampler_cfg
-        workflow['3']['inputs']['sampler_name'] = ksampler_sampler_name
-        workflow['3']['inputs']['scheduler'] = ksampler_scheduler
-        workflow['3']['inputs']['denoise'] = ksampler_denoise
-        workflow['3']['inputs']['model'] = ksampler_model
-        workflow['3']['inputs']['positive'] = ksampler_positive
-        workflow['3']['inputs']['negative'] = ksampler_negative
-        workflow['3']['inputs']['latent_image'] = ksampler_latent_image
+        workflow['3']['inputs']['seed'] = ksampler_seed_3
+        workflow['3']['inputs']['steps'] = ksampler_steps_3
+        workflow['3']['inputs']['cfg'] = ksampler_cfg_3
+        workflow['3']['inputs']['sampler_name'] = ksampler_sampler_name_3
+        workflow['3']['inputs']['scheduler'] = ksampler_scheduler_3
+        workflow['3']['inputs']['denoise'] = ksampler_denoise_3
+        workflow['3']['inputs']['model'] = ksampler_model_3
+        workflow['3']['inputs']['positive'] = ksampler_positive_3
+        workflow['3']['inputs']['negative'] = ksampler_negative_3
+        workflow['3']['inputs']['latent_image'] = ksampler_latent_image_3
         workflow['4']['inputs']['ckpt_name'] = load_checkpoint_ckpt_name
         workflow['5']['inputs']['width'] = empty_latent_image_width
         workflow['5']['inputs']['height'] = empty_latent_image_height
@@ -343,4 +459,16 @@ class ComfyWorkflowAPI:
         workflow['6']['inputs']['clip'] = clip_text_encode__prompt__clip_6
         workflow['7']['inputs']['text'] = clip_text_encode__prompt__text_7
         workflow['7']['inputs']['clip'] = clip_text_encode__prompt__clip_7
+        workflow['10']['inputs']['text'] = clip_text_encode__prompt__text
+        workflow['10']['inputs']['clip'] = clip_text_encode__prompt__clip
+        workflow['11']['inputs']['seed'] = ksampler_seed_11
+        workflow['11']['inputs']['steps'] = ksampler_steps_11
+        workflow['11']['inputs']['cfg'] = ksampler_cfg_11
+        workflow['11']['inputs']['sampler_name'] = ksampler_sampler_name_11
+        workflow['11']['inputs']['scheduler'] = ksampler_scheduler_11
+        workflow['11']['inputs']['denoise'] = ksampler_denoise_11
+        workflow['11']['inputs']['model'] = ksampler_model_11
+        workflow['11']['inputs']['positive'] = ksampler_positive_11
+        workflow['11']['inputs']['negative'] = ksampler_negative_11
+        workflow['11']['inputs']['latent_image'] = ksampler_latent_image_11
         return {'prompt': workflow}
