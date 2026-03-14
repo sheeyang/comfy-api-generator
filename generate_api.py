@@ -216,7 +216,6 @@ def run_dynamic_generator(
     emit_validate_connections: bool = True,
     emit_schema: bool = True,
     emit_ranges: bool = True,
-    emit_output_types: bool = True,
     emit_docstrings: bool = True,
 ) -> None:
     """Main entry point: parse workflow + schema, then emit generated_client.py.
@@ -224,15 +223,14 @@ def run_dynamic_generator(
     Feature flags (all default True — set to False to omit that feature):
         emit_validate_enums:       include the validate_enums decorator
         emit_validate_ranges:      include the validate_ranges decorator
-        emit_validate_connections: include the validate_connections decorator
+        emit_validate_connections: include the validate_connections decorator and _OUTPUT_TYPES dict
         emit_schema:               include the _SCHEMA dict and schema() classmethod
         emit_ranges:               include the _RANGES dict
-        emit_output_types:         include the _OUTPUT_TYPES dict
         emit_docstrings:           include the Args: docstring block in build_payload
 
     Conflict rules (hard errors):
         emit_validate_enums=True  requires emit_schema=True
-        emit_validate_connections=True requires emit_schema=True and emit_output_types=True
+        emit_validate_connections=True requires emit_schema=True
         emit_validate_ranges=True  requires emit_ranges=True
     """
     # ------------------------------------------------------------------
@@ -249,12 +247,6 @@ def run_dynamic_generator(
             "--no-schema cannot be used when connection validation is enabled. "
             "validate_connections reads from _SCHEMA at runtime. "
             "Add --no-validate-connections or remove --no-schema."
-        )
-    if emit_validate_connections and not emit_output_types:
-        raise ValueError(
-            "--no-output-types cannot be used when connection validation is enabled. "
-            "validate_connections reads from _OUTPUT_TYPES at runtime. "
-            "Add --no-validate-connections or remove --no-output-types."
         )
     if emit_validate_ranges and not emit_ranges:
         raise ValueError(
@@ -541,7 +533,7 @@ def run_dynamic_generator(
         code_lines.append("}")
 
     # Emit _OUTPUT_TYPES: maps (node_id, slot_index) → raw ComfyUI output type.
-    if emit_output_types:
+    if emit_validate_connections:
         code_lines.append("")
         code_lines.append(
             "# --- Node Output Types (for connection provenance validation) ---"
@@ -845,15 +837,6 @@ def _build_arg_parser():
         ),
     )
     feat.add_argument(
-        "--no-output-types",
-        action="store_true",
-        dest="no_output_types",
-        help=(
-            "Omit the _OUTPUT_TYPES dict. "
-            "Incompatible with connection validation being enabled."
-        ),
-    )
-    feat.add_argument(
         "--no-docstrings",
         action="store_true",
         dest="no_docstrings",
@@ -873,7 +856,6 @@ if __name__ == "__main__":
     no_validate_connections = args.no_validate_connections or args.release
     no_schema = args.no_schema or args.release
     no_ranges = args.no_ranges or args.release
-    no_output_types = args.no_output_types or args.release
     no_docstrings = args.no_docstrings or args.release
 
     try:
@@ -886,7 +868,6 @@ if __name__ == "__main__":
             emit_validate_connections=not no_validate_connections,
             emit_schema=not no_schema,
             emit_ranges=not no_ranges,
-            emit_output_types=not no_output_types,
             emit_docstrings=not no_docstrings,
         )
     except (ValueError, RuntimeError) as exc:
