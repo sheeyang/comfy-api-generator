@@ -121,14 +121,17 @@ def _resolve_type(
     primitives: dict,
     discovered_custom_types: set,
     discovered_enums: dict,
+    *,
+    free_string: bool = False,
 ) -> str:
     """
     Resolve the Python type for a given node input by consulting object_info.
 
     Rules:
-      1. If the schema type is a list (dropdown/enum) -> Literal[...] alias
-      2. If it matches a known primitive (INT, FLOAT, STRING, BOOLEAN) -> builtin
-      3. Otherwise -> auto-discover a NewType wrapping ComfyConnection
+      1. If free_string is True (node tagged API_ANY_STRING) -> str, no enum
+      2. If the schema type is a list (dropdown/enum) -> Literal[...] alias
+      3. If it matches a known primitive (INT, FLOAT, STRING, BOOLEAN) -> builtin
+      4. Otherwise -> auto-discover a NewType wrapping ComfyConnection
     """
     node_schema = object_info.get(class_type, {}).get("input", {})
 
@@ -144,6 +147,10 @@ def _resolve_type(
         return "str"
 
     if isinstance(comfy_type, list):
+        # API_ANY_STRING: caller explicitly opts out of enum validation —
+        # treat as a free string regardless of the schema's choices list.
+        if free_string:
+            return "str"
         # Build a Literal alias from the dropdown choices (strings only).
         choices = [v for v in comfy_type if isinstance(v, str)]
         if not choices:
@@ -164,18 +171,39 @@ def _resolve_type(
     return py_type
 
 
+def _has_any_string_tag(title: str) -> bool:
+    """Return True if the title contains the API_ANY_STRING modifier tag.
+
+    Matches titles like 'API_ANY_STRING_Load Image' or 'API_ANY_STRING Load Image'.
+    """
+    upper = title.upper()
+    if not upper.startswith("API_"):
+        return False
+    remainder = upper[4:]  # strip "API_"
+    return remainder.startswith("ANY_STRING")
+
+
+def _strip_any_string_tag(name: str) -> str:
+    """Remove the ANY_STRING modifier from a name fragment (after API_ is stripped).
+
+    Handles both 'ANY_STRING_Load Image' and 'ANY_STRING Load Image'.
+    """
+    return re.sub(r"^ANY_STRING[_ ]?", "", name, flags=re.IGNORECASE).strip()
+
+
 def _title_to_class_name(title: str, node_id: str, seen: dict, nodes_map: dict) -> str:
     """
     Convert a node _meta.title to a unique PascalCase inner class name.
 
-    Strips 'API_' prefix if present, title-cases each word, removes
-    non-identifier characters. On collision, BOTH the original entry and the
-    new one are postfixed with their respective node IDs, so no entry ever
-    holds an ambiguous bare name.
+    Strips 'API_' prefix and 'ANY_STRING' modifier if present, title-cases
+    each word, removes non-identifier characters. On collision, BOTH the
+    original entry and the new one are postfixed with their respective node
+    IDs, so no entry ever holds an ambiguous bare name.
     """
     name = title
     if name.upper().startswith("API_"):
         name = name[4:].strip()
+    name = _strip_any_string_tag(name)
     name = re.sub(r"[^0-9a-zA-Z]+", " ", name).strip()
     name = "".join(word.capitalize() for word in name.split())
     if not name:
@@ -329,7 +357,11 @@ def run_dynamic_generator(
             continue
 
         api_nodes_found += 1
-        node_name = _sanitize_identifier(title[len("API_") :].strip().lower())
+        raw_node_label = title[len("API_") :].strip()
+        free_string_node = _has_any_string_tag(title)
+        if free_string_node:
+            raw_node_label = _strip_any_string_tag(raw_node_label)
+        node_name = _sanitize_identifier(raw_node_label.lower())
         class_type = node_data["class_type"]
 
         for input_name, input_value in node_data["inputs"].items():
@@ -380,6 +412,7 @@ def run_dynamic_generator(
                 PRIMITIVES,
                 discovered_custom_types,
                 discovered_enums,
+                free_string=free_string_node,
             )
 
             description = _get_input_doc(class_type, input_name, object_info)
@@ -631,7 +664,8 @@ def run_dynamic_generator(
                 "    def wrapper(self, *args, **kwargs):",
                 "        errors = []",
                 "        for key, val in kwargs.items():",
-                "            choices = _SCHEMA.get(key, {}).get('choices')",
+                "            spec = _SCHEMA.get(key, {})",
+                "            choices = spec.get('choices')",
                 "            if choices is not None and val not in choices:",
                 "                errors.append(",
                 "                    f\"Argument '{key}' must be one of {choices!r}, got {val!r}\"",
