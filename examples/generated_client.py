@@ -293,7 +293,11 @@ def validate_connections(func):
                 expected_type = _SCHEMA.get(key, {}).get('comfy_type')
                 if expected_type:
                     actual_type = _OUTPUT_TYPES.get((val[0], val[1]))
-                    if actual_type and actual_type != expected_type:
+                    if actual_type is None:
+                        errors.append(
+                            f"Argument '{key}': node {val[0]!r} output {val[1]} is not in this workflow"
+                        )
+                    elif actual_type != expected_type:
                         errors.append(
                             f"Argument '{key}' expects a {expected_type!r} connection, "
                             f"but node {val[0]!r} output {val[1]} produces {actual_type!r}"
