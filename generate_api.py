@@ -665,8 +665,18 @@ def run_dynamic_generator(
             [
                 "    @classmethod",
                 "    def schema(cls) -> Dict[str, Any]:",
-                '        """Return a machine-readable description of all build_payload parameters."""',
-                "        return _SCHEMA",
+                '        """Return a JSON-serializable description of all build_payload parameters.',
+                "",
+                "        Connection defaults (tuples from Nodes.*) are converted to",
+                "        [node_id, slot_index] lists so the result is json.dumps()-safe.",
+                '        """',
+                "        out = {}",
+                "        for k, v in _SCHEMA.items():",
+                "            entry = dict(v)",
+                "            if isinstance(entry.get('default'), tuple):",
+                "                entry['default'] = list(entry['default'])",
+                "            out[k] = entry",
+                "        return out",
                 "",
             ]
         )
