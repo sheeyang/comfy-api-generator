@@ -92,7 +92,9 @@ def _get_input_tooltip(class_type: str, input_name: str, object_info: dict) -> s
     return ""
 
 
-def _get_input_constraints(class_type: str, input_name: str, object_info: dict) -> tuple:
+def _get_input_constraints(
+    class_type: str, input_name: str, object_info: dict
+) -> tuple:
     """Return (min_val, max_val) for a numeric input, or (None, None)."""
     node_schema = object_info.get(class_type, {}).get("input", {})
     for section in ("required", "optional"):
@@ -201,8 +203,64 @@ def run_dynamic_generator(
     workflow_path: str = "workflow_api.json",
     output_path: str = "generated_client.py",
     comfyui_url: str = "http://127.0.0.1:8188",
+    *,
+    emit_validate_enums: bool = True,
+    emit_validate_ranges: bool = True,
+    emit_validate_connections: bool = True,
+    emit_schema: bool = True,
+    emit_ranges: bool = True,
+    emit_output_types: bool = True,
+    emit_docstrings: bool = True,
+    emit_nodes: bool = True,
 ) -> None:
-    """Main entry point: parse workflow + schema, then emit generated_client.py."""
+    """Main entry point: parse workflow + schema, then emit generated_client.py.
+
+    Feature flags (all default True — set to False to omit that feature):
+        emit_validate_enums:       include the validate_enums decorator
+        emit_validate_ranges:      include the validate_ranges decorator
+        emit_validate_connections: include the validate_connections decorator
+        emit_schema:               include the _SCHEMA dict and schema() classmethod
+        emit_ranges:               include the _RANGES dict
+        emit_output_types:         include the _OUTPUT_TYPES dict
+        emit_docstrings:           include the Args: docstring block in build_payload
+        emit_nodes:                include the class Nodes: namespace
+
+    Conflict rules (hard errors):
+        emit_validate_enums=True  requires emit_schema=True
+        emit_validate_connections=True requires emit_schema=True and emit_output_types=True
+        emit_validate_ranges=True  requires emit_ranges=True
+    """
+    # ------------------------------------------------------------------
+    # 0. Validate flag combinations
+    # ------------------------------------------------------------------
+    if emit_validate_enums and not emit_schema:
+        print(
+            "ERROR: --no-schema cannot be used when enum validation is enabled.\n"
+            "       validate_enums reads from _SCHEMA at runtime.\n"
+            "       Add --no-validate-enums or remove --no-schema."
+        )
+        sys.exit(1)
+    if emit_validate_connections and not emit_schema:
+        print(
+            "ERROR: --no-schema cannot be used when connection validation is enabled.\n"
+            "       validate_connections reads from _SCHEMA at runtime.\n"
+            "       Add --no-validate-connections or remove --no-schema."
+        )
+        sys.exit(1)
+    if emit_validate_connections and not emit_output_types:
+        print(
+            "ERROR: --no-output-types cannot be used when connection validation is enabled.\n"
+            "       validate_connections reads from _OUTPUT_TYPES at runtime.\n"
+            "       Add --no-validate-connections or remove --no-output-types."
+        )
+        sys.exit(1)
+    if emit_validate_ranges and not emit_ranges:
+        print(
+            "ERROR: --no-ranges cannot be used when range validation is enabled.\n"
+            "       validate_ranges reads from _RANGES at runtime.\n"
+            "       Add --no-validate-ranges or remove --no-ranges."
+        )
+        sys.exit(1)
 
     # ------------------------------------------------------------------
     # 1. Load the graph template
@@ -236,7 +294,9 @@ def run_dynamic_generator(
         raw_output_names = object_info.get(class_type, {}).get("output_name", [])
         raw_output_types = object_info.get(class_type, {}).get("output", [])
         if raw_output_names:
-            slots = [s.upper() if s else f"OUT_{i}" for i, s in enumerate(raw_output_names)]
+            slots = [
+                s.upper() if s else f"OUT_{i}" for i, s in enumerate(raw_output_names)
+            ]
         else:
             output_count = len(raw_output_types)
             slots = [f"OUT_{i}" for i in range(output_count)]
@@ -274,7 +334,7 @@ def run_dynamic_generator(
             continue
 
         api_nodes_found += 1
-        node_name = _sanitize_identifier(title[len("API_"):].strip().lower())
+        node_name = _sanitize_identifier(title[len("API_") :].strip().lower())
         class_type = node_data["class_type"]
 
         for input_name, input_value in node_data["inputs"].items():
@@ -289,11 +349,15 @@ def run_dynamic_generator(
                 # Retroactively rename the first occurrence in args and assignments.
                 for i, line in enumerate(args):
                     if f"        {arg_name}:" in line:
-                        args[i] = line.replace(f"        {arg_name}:", f"        {orig_new_name}:", 1)
+                        args[i] = line.replace(
+                            f"        {arg_name}:", f"        {orig_new_name}:", 1
+                        )
                         break
                 for i, line in enumerate(assignments):
                     if f"] = {arg_name}" in line:
-                        assignments[i] = line.replace(f"] = {arg_name}", f"] = {orig_new_name}", 1)
+                        assignments[i] = line.replace(
+                            f"] = {arg_name}", f"] = {orig_new_name}", 1
+                        )
                         break
 
                 seen_arg_names[orig_new_name] = (orig_origin, orig_node_id)
@@ -331,7 +395,9 @@ def run_dynamic_generator(
             doc_entries.append((arg_name, description))
             tooltip = _get_input_tooltip(class_type, input_name, object_info)
             mn, mx = _get_input_constraints(class_type, input_name, object_info)
-            default_fmt = _format_default(input_value, nodes_map)
+            default_fmt = _format_default(
+                input_value, nodes_map if emit_nodes else None
+            )
             default_code = default_fmt[3:] if default_fmt.startswith(" = ") else ""
             choices = discovered_enums.get(py_type)
             # Resolve raw ComfyUI type for connection provenance validation.
@@ -343,16 +409,18 @@ def run_dynamic_generator(
                     if isinstance(_ct, str) and _ct not in PRIMITIVES:
                         _raw_comfy_type = _ct
                     break
-            schema_entries.append({
-                "name": arg_name,
-                "type": py_type,
-                "default_code": default_code,
-                "min": mn,
-                "max": mx,
-                "description": tooltip,
-                "choices": choices,
-                "comfy_type": _raw_comfy_type,
-            })
+            schema_entries.append(
+                {
+                    "name": arg_name,
+                    "type": py_type,
+                    "default_code": default_code,
+                    "min": mn,
+                    "max": mx,
+                    "description": tooltip,
+                    "choices": choices,
+                    "comfy_type": _raw_comfy_type,
+                }
+            )
             args.append(f"        {arg_name}: {py_type}{default_fmt},")
             assignments.append(
                 f"        workflow['{node_id}']['inputs']['{input_name}'] = {arg_name}"
@@ -367,6 +435,24 @@ def run_dynamic_generator(
     # ------------------------------------------------------------------
     # 4. Build the generated source code
     # ------------------------------------------------------------------
+    # 4. Build the generated source code
+    # ------------------------------------------------------------------
+    any_validator = (
+        emit_validate_enums or emit_validate_ranges or emit_validate_connections
+    )
+
+    imports = ["import copy", "import json"]
+    if any_validator:
+        imports.append("import functools")
+    typing_names = ["Any", "Dict"]
+    if discovered_custom_types:
+        typing_names.append("NewType")
+    if discovered_enums:
+        typing_names.append("Literal")
+    if emit_output_types or discovered_custom_types:
+        typing_names.append("Tuple")
+    imports.append(f"from typing import {', '.join(sorted(typing_names))}")
+
     code_lines: list[str] = [
         '"""',
         "Auto-generated ComfyUI workflow facade.",
@@ -374,19 +460,14 @@ def run_dynamic_generator(
         "DO NOT EDIT — this file is regenerated by generate_api.py.",
         '"""',
         "",
-        "import copy",
-        "import json",
-        "import functools",
-        "from typing import Any, Dict, Literal, NewType, Tuple",
+        *imports,
         "",
         "# --- Auto-Generated Strict Types ---",
         "ComfyConnection = Tuple[str, int]",
     ]
 
     for custom_type in sorted(discovered_custom_types):
-        code_lines.append(
-            f"{custom_type} = NewType('{custom_type}', ComfyConnection)"
-        )
+        code_lines.append(f"{custom_type} = NewType('{custom_type}', ComfyConnection)")
 
     if discovered_enums:
         code_lines.append("")
@@ -396,123 +477,153 @@ def run_dynamic_generator(
             code_lines.append(f"{alias} = Literal[{joined}]")
 
     # Nodes namespace — one inner class per workflow node, slots as tuple constants
-    code_lines.append("")
-    code_lines.append("")
-    code_lines.append("# --- Workflow Node Connections ---")
-    code_lines.append("class Nodes:")
-    for nid, ninfo in nodes_map.items():
-        code_lines.append(
-            f"    class {ninfo['class_name']}:  # node {nid} · {ninfo['title']}"
-        )
-        if ninfo["slots"]:
-            for idx, slot in enumerate(ninfo["slots"]):
-                code_lines.append(f"        {slot} = ({repr(nid)}, {idx})")
-        else:
-            code_lines.append("        pass")
+    if emit_nodes:
+        code_lines.append("")
+        code_lines.append("")
+        code_lines.append("# --- Workflow Node Connections ---")
+        code_lines.append("class Nodes:")
+        for nid, ninfo in nodes_map.items():
+            code_lines.append(
+                f"    class {ninfo['class_name']}:  # node {nid} · {ninfo['title']}"
+            )
+            if ninfo["slots"]:
+                for idx, slot in enumerate(ninfo["slots"]):
+                    code_lines.append(f"        {slot} = ({repr(nid)}, {idx})")
+            else:
+                code_lines.append("        pass")
 
     # Emit _RANGES: numeric constraints for runtime validation.
-    code_lines.append("")
-    code_lines.append("# --- Input Range Constraints ---")
-    code_lines.append("_RANGES: Dict[str, Any] = {")
-    for entry in schema_entries:
-        if entry["min"] is not None or entry["max"] is not None:
-            code_lines.append(f"    {repr(entry['name'])}: ({entry['min']!r}, {entry['max']!r}),")
-    code_lines.append("}")
+    if emit_ranges:
+        code_lines.append("")
+        code_lines.append("# --- Input Range Constraints ---")
+        code_lines.append("_RANGES: Dict[str, Any] = {")
+        for entry in schema_entries:
+            if entry["min"] is not None or entry["max"] is not None:
+                code_lines.append(
+                    f"    {repr(entry['name'])}: ({entry['min']!r}, {entry['max']!r}),"
+                )
+        code_lines.append("}")
 
     # Emit _SCHEMA: full parameter descriptions.
-    code_lines.append("")
-    code_lines.append("# --- Parameter Schema ---")
-    code_lines.append("_SCHEMA: Dict[str, Any] = {")
-    for entry in schema_entries:
-        code_lines.append(f"    {repr(entry['name'])}: {{")
-        code_lines.append(f"        'type': {repr(entry['type'])},")
-        if entry["default_code"]:
-            code_lines.append(f"        'default': {entry['default_code']},")
-        if entry["min"] is not None:
-            code_lines.append(f"        'min': {entry['min']!r},")
-        if entry["max"] is not None:
-            code_lines.append(f"        'max': {entry['max']!r},")
-        if entry.get("choices"):
-            joined = ", ".join(repr(c) for c in entry["choices"])
-            code_lines.append(f"        'choices': [{joined}],")
-        if entry["description"]:
-            code_lines.append(f"        'description': {repr(entry['description'])},")
-        if entry.get("comfy_type"):
-            code_lines.append(f"        'comfy_type': {repr(entry['comfy_type'])},")
-        code_lines.append("    },")
-    code_lines.append("}")
+    if emit_schema:
+        code_lines.append("")
+        code_lines.append("# --- Parameter Schema ---")
+        code_lines.append("_SCHEMA: Dict[str, Any] = {")
+        for entry in schema_entries:
+            code_lines.append(f"    {repr(entry['name'])}: {{")
+            code_lines.append(f"        'type': {repr(entry['type'])},")
+            if entry["default_code"]:
+                code_lines.append(f"        'default': {entry['default_code']},")
+            if entry["min"] is not None:
+                code_lines.append(f"        'min': {entry['min']!r},")
+            if entry["max"] is not None:
+                code_lines.append(f"        'max': {entry['max']!r},")
+            if entry.get("choices"):
+                joined = ", ".join(repr(c) for c in entry["choices"])
+                code_lines.append(f"        'choices': [{joined}],")
+            if entry["description"]:
+                code_lines.append(
+                    f"        'description': {repr(entry['description'])},"
+                )
+            if entry.get("comfy_type"):
+                code_lines.append(f"        'comfy_type': {repr(entry['comfy_type'])},")
+            code_lines.append("    },")
+        code_lines.append("}")
 
     # Emit _OUTPUT_TYPES: maps (node_id, slot_index) → raw ComfyUI output type.
-    code_lines.append("")
-    code_lines.append("# --- Node Output Types (for connection provenance validation) ---")
-    code_lines.append("_OUTPUT_TYPES: Dict[Tuple[str, int], str] = {")
-    for nid, ninfo in nodes_map.items():
-        for idx, otype in enumerate(ninfo.get("output_types", [])):
-            if isinstance(otype, str):
-                code_lines.append(f"    ({repr(nid)}, {idx}): {repr(otype)},")
-    code_lines.append("}")
+    if emit_output_types:
+        code_lines.append("")
+        code_lines.append(
+            "# --- Node Output Types (for connection provenance validation) ---"
+        )
+        code_lines.append("_OUTPUT_TYPES: Dict[Tuple[str, int], str] = {")
+        for nid, ninfo in nodes_map.items():
+            for idx, otype in enumerate(ninfo.get("output_types", [])):
+                if isinstance(otype, str):
+                    code_lines.append(f"    ({repr(nid)}, {idx}): {repr(otype)},")
+        code_lines.append("}")
+
+    if any_validator:
+        code_lines.append("")
+        code_lines.append("")
+        code_lines.append("# --- Runtime Validation ---")
+
+    if emit_validate_connections:
+        code_lines.extend(
+            [
+                "def validate_connections(func):",
+                '    """Decorator: validates ComfyConnection shape and type provenance at runtime."""',
+                "    @functools.wraps(func)",
+                "    def wrapper(self, *args, **kwargs):",
+                "        for key, val in kwargs.items():",
+                "            if isinstance(val, (tuple, list)):",
+                "                if (",
+                "                    len(val) != 2",
+                "                    or not isinstance(val[0], str)",
+                "                    or not isinstance(val[1], int)",
+                "                ):",
+                "                    raise ValueError(",
+                "                        f\"Argument '{key}' expected "
+                '(NodeID: str, OutputIndex: int), got {val}"',
+                "                    )",
+                "                expected_type = _SCHEMA.get(key, {}).get('comfy_type')",
+                "                if expected_type:",
+                "                    actual_type = _OUTPUT_TYPES.get((val[0], val[1]))",
+                "                    if actual_type and actual_type != expected_type:",
+                "                        raise ValueError(",
+                "                            f\"Argument '{key}' expects a {expected_type!r} connection, \"",
+                '                            f"but node {val[0]!r} output {val[1]} produces {actual_type!r}"',
+                "                        )",
+                "        return func(self, *args, **kwargs)",
+                "    return wrapper",
+                "",
+                "",
+            ]
+        )
+
+    if emit_validate_ranges:
+        code_lines.extend(
+            [
+                "def validate_ranges(func):",
+                '    """Decorator that validates numeric argument ranges at runtime."""',
+                "    @functools.wraps(func)",
+                "    def wrapper(self, *args, **kwargs):",
+                "        for key, val in kwargs.items():",
+                "            if key in _RANGES and isinstance(val, (int, float)):",
+                "                lo, hi = _RANGES[key]",
+                "                if not (lo <= val <= hi):",
+                "                    raise ValueError(",
+                "                        f\"Argument '{key}' must be between {lo} and {hi}, got {val}\"",
+                "                    )",
+                "        return func(self, *args, **kwargs)",
+                "    return wrapper",
+                "",
+                "",
+            ]
+        )
+
+    if emit_validate_enums:
+        code_lines.extend(
+            [
+                "def validate_enums(func):",
+                '    """Decorator that validates Literal/enum argument choices at runtime."""',
+                "    @functools.wraps(func)",
+                "    def wrapper(self, *args, **kwargs):",
+                "        for key, val in kwargs.items():",
+                "            choices = _SCHEMA.get(key, {}).get('choices')",
+                "            if choices is not None and val not in choices:",
+                "                raise ValueError(",
+                "                    f\"Argument '{key}' must be one of {choices!r}, got {val!r}\"",
+                "                )",
+                "        return func(self, *args, **kwargs)",
+                "    return wrapper",
+                "",
+                "",
+            ]
+        )
 
     code_lines.extend(
         [
-            "",
-            "",
-            "# --- Runtime Validation ---",
-            "def validate_connections(func):",
-            '    """Decorator: validates ComfyConnection shape and type provenance at runtime."""',
-            "    @functools.wraps(func)",
-            "    def wrapper(self, *args, **kwargs):",
-            "        for key, val in kwargs.items():",
-            "            if isinstance(val, (tuple, list)):",
-            "                if (",
-            "                    len(val) != 2",
-            "                    or not isinstance(val[0], str)",
-            "                    or not isinstance(val[1], int)",
-            "                ):",
-            "                    raise ValueError(",
-            '                        f"Argument \'{key}\' expected '
-            "(NodeID: str, OutputIndex: int), got {val}\"",
-            "                    )",
-            "                expected_type = _SCHEMA.get(key, {}).get('comfy_type')",
-            "                if expected_type:",
-            "                    actual_type = _OUTPUT_TYPES.get((val[0], val[1]))",
-            "                    if actual_type and actual_type != expected_type:",
-            "                        raise ValueError(",
-            "                            f\"Argument '{key}' expects a {expected_type!r} connection, \"",
-            "                            f\"but node {val[0]!r} output {val[1]} produces {actual_type!r}\"",
-            "                        )",
-            "        return func(self, *args, **kwargs)",
-            "    return wrapper",
-            "",
-            "",
-            "def validate_ranges(func):",
-            '    """Decorator that validates numeric argument ranges at runtime."""',
-            "    @functools.wraps(func)",
-            "    def wrapper(self, *args, **kwargs):",
-            "        for key, val in kwargs.items():",
-            "            if key in _RANGES and isinstance(val, (int, float)):",
-            "                lo, hi = _RANGES[key]",
-            "                if not (lo <= val <= hi):",
-            "                    raise ValueError(",
-            '                        f"Argument \'{key}\' must be between {lo} and {hi}, got {val}"',
-            "                    )",
-            "        return func(self, *args, **kwargs)",
-            "    return wrapper",
-            "",
-            "",
-            "def validate_enums(func):",
-            '    """Decorator that validates Literal/enum argument choices at runtime."""',
-            "    @functools.wraps(func)",
-            "    def wrapper(self, *args, **kwargs):",
-            "        for key, val in kwargs.items():",
-            "            choices = _SCHEMA.get(key, {}).get('choices')",
-            "            if choices is not None and val not in choices:",
-            "                raise ValueError(",
-            "                    f\"Argument '{key}' must be one of {choices!r}, got {val!r}\"",
-            "                )",
-            "        return func(self, *args, **kwargs)",
-            "    return wrapper",
-            "",
-            "",
             "class ComfyWorkflowAPI:",
             '    """Type-safe facade over the ComfyUI workflow graph."""',
             "",
@@ -520,23 +631,34 @@ def run_dynamic_generator(
             "        with open(template_path, 'r', encoding='utf-8') as f:",
             "            self.base_workflow = json.load(f)",
             "",
-            "    @classmethod",
-            "    def schema(cls) -> Dict[str, Any]:",
-            '        """Return a machine-readable description of all build_payload parameters."""',
-            "        return _SCHEMA",
-            "",
-            "    @validate_connections",
-            "    @validate_ranges",
-            "    @validate_enums",
-            "    def build_payload(",
         ]
     )
+
+    if emit_schema:
+        code_lines.extend(
+            [
+                "    @classmethod",
+                "    def schema(cls) -> Dict[str, Any]:",
+                '        """Return a machine-readable description of all build_payload parameters."""',
+                "        return _SCHEMA",
+                "",
+            ]
+        )
+
+    if emit_validate_connections:
+        code_lines.append("    @validate_connections")
+    if emit_validate_ranges:
+        code_lines.append("    @validate_ranges")
+    if emit_validate_enums:
+        code_lines.append("    @validate_enums")
+
+    code_lines.append("    def build_payload(")
 
     code_lines.extend(args)
     code_lines.append("    ) -> Dict[str, Any]:")
     # Build multi-line docstring with Args section.
     code_lines.append('        """Build a ready-to-submit ComfyUI prompt payload.')
-    if doc_entries:
+    if emit_docstrings and doc_entries:
         code_lines.append("")
         code_lines.append("        Args:")
         for arg_name, description in doc_entries:
@@ -556,13 +678,16 @@ def run_dynamic_generator(
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(code_lines))
 
-    print(f"Generated {output_path}  ({api_nodes_found} API node(s), "
-          f"{len(discovered_custom_types)} custom type(s), "
-          f"{len(discovered_enums)} enum type(s))")
+    print(
+        f"Generated {output_path}  ({api_nodes_found} API node(s), "
+        f"{len(discovered_custom_types)} custom type(s), "
+        f"{len(discovered_enums)} enum type(s))"
+    )
 
 
 def _build_arg_parser():
     import argparse
+
     p = argparse.ArgumentParser(
         prog="generate_api",
         description=(
@@ -577,22 +702,27 @@ def _build_arg_parser():
             "  python generate_api.py --workflow my_workflow.json --out client.py\n"
             "  python generate_api.py --url http://192.168.1.10:8188\n"
             "  python generate_api.py --out examples/generated_client.py --examples\n"
+            "  python generate_api.py --release\n"
+            "  python generate_api.py --no-validate-enums --no-validate-ranges\n"
         ),
     )
     p.add_argument(
-        "--workflow", "-w",
+        "--workflow",
+        "-w",
         default="workflow_api.json",
         metavar="PATH",
         help="Path to the workflow_api.json file  (default: workflow_api.json)",
     )
     p.add_argument(
-        "--out", "-o",
+        "--out",
+        "-o",
         default="generated_client.py",
         metavar="PATH",
         help="Destination path for the generated Python file  (default: generated_client.py)",
     )
     p.add_argument(
-        "--url", "-u",
+        "--url",
+        "-u",
         default="http://127.0.0.1:8188",
         metavar="URL",
         help="Base URL of the running ComfyUI instance  (default: http://127.0.0.1:8188)",
@@ -605,19 +735,113 @@ def _build_arg_parser():
             "directory as --out"
         ),
     )
+
+    # --- Feature disable flags ---
+    feat = p.add_argument_group(
+        "feature flags",
+        "Disable individual features in the generated file. "
+        "Use --release to disable all at once.",
+    )
+    feat.add_argument(
+        "--release",
+        action="store_true",
+        help=(
+            "Disable all optional features (equivalent to combining all --no-* flags). "
+            "Produces the leanest possible output with no validation, no schema, "
+            "no docstrings, and no Nodes namespace."
+        ),
+    )
+    feat.add_argument(
+        "--no-validate-enums",
+        action="store_true",
+        dest="no_validate_enums",
+        help="Omit the validate_enums decorator from the generated file.",
+    )
+    feat.add_argument(
+        "--no-validate-ranges",
+        action="store_true",
+        dest="no_validate_ranges",
+        help="Omit the validate_ranges decorator from the generated file.",
+    )
+    feat.add_argument(
+        "--no-validate-connections",
+        action="store_true",
+        dest="no_validate_connections",
+        help="Omit the validate_connections decorator from the generated file.",
+    )
+    feat.add_argument(
+        "--no-schema",
+        action="store_true",
+        dest="no_schema",
+        help=(
+            "Omit the _SCHEMA dict and schema() classmethod. "
+            "Incompatible with --no-validate-enums=False or --no-validate-connections=False "
+            "(i.e. those validators must also be disabled)."
+        ),
+    )
+    feat.add_argument(
+        "--no-ranges",
+        action="store_true",
+        dest="no_ranges",
+        help=(
+            "Omit the _RANGES dict. Incompatible with range validation being enabled."
+        ),
+    )
+    feat.add_argument(
+        "--no-output-types",
+        action="store_true",
+        dest="no_output_types",
+        help=(
+            "Omit the _OUTPUT_TYPES dict. "
+            "Incompatible with connection validation being enabled."
+        ),
+    )
+    feat.add_argument(
+        "--no-docstrings",
+        action="store_true",
+        dest="no_docstrings",
+        help="Omit the Args: docstring block from build_payload.",
+    )
+    feat.add_argument(
+        "--no-nodes",
+        action="store_true",
+        dest="no_nodes",
+        help="Omit the class Nodes: namespace from the generated file.",
+    )
     return p
 
 
 if __name__ == "__main__":
     import argparse
+
     args = _build_arg_parser().parse_args()
+
+    # --release implies all --no-* flags
+    no_validate_enums = args.no_validate_enums or args.release
+    no_validate_ranges = args.no_validate_ranges or args.release
+    no_validate_connections = args.no_validate_connections or args.release
+    no_schema = args.no_schema or args.release
+    no_ranges = args.no_ranges or args.release
+    no_output_types = args.no_output_types or args.release
+    no_docstrings = args.no_docstrings or args.release
+    no_nodes = args.no_nodes or args.release
+
     run_dynamic_generator(
         workflow_path=args.workflow,
         output_path=args.out,
         comfyui_url=args.url,
+        emit_validate_enums=not no_validate_enums,
+        emit_validate_ranges=not no_validate_ranges,
+        emit_validate_connections=not no_validate_connections,
+        emit_schema=not no_schema,
+        emit_ranges=not no_ranges,
+        emit_output_types=not no_output_types,
+        emit_docstrings=not no_docstrings,
+        emit_nodes=not no_nodes,
     )
     if args.examples:
         import os, textwrap
+
         out_dir = os.path.dirname(os.path.abspath(args.out))
         client_module = os.path.splitext(os.path.basename(args.out))[0]
 
