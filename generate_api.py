@@ -218,7 +218,6 @@ def run_dynamic_generator(
     emit_ranges: bool = True,
     emit_output_types: bool = True,
     emit_docstrings: bool = True,
-    emit_nodes: bool = True,
 ) -> None:
     """Main entry point: parse workflow + schema, then emit generated_client.py.
 
@@ -230,7 +229,6 @@ def run_dynamic_generator(
         emit_ranges:               include the _RANGES dict
         emit_output_types:         include the _OUTPUT_TYPES dict
         emit_docstrings:           include the Args: docstring block in build_payload
-        emit_nodes:                include the class Nodes: namespace
 
     Conflict rules (hard errors):
         emit_validate_enums=True  requires emit_schema=True
@@ -396,17 +394,14 @@ def run_dynamic_generator(
             mn, mx = _get_input_constraints(class_type, input_name, object_info)
             default_fmt = _format_default(
                 input_value,
-                nodes_map if emit_nodes else None,
+                nodes_map,
                 context=f"node {node_id} ({title}) › {input_name}",
             )
             default_code = default_fmt[3:] if default_fmt.startswith(" = ") else ""
-            # For _SCHEMA defaults on connection inputs:
-            # - When emit_nodes is True, use Nodes.X.SLOT references (matches
-            #   the build_payload signature and keeps the dev experience consistent).
-            # - When emit_nodes is False (release mode), fall back to plain
-            #   JSON-serializable lists so json.dumps(schema()) still works.
+            # For _SCHEMA defaults on connection inputs, use Nodes.X.SLOT references
+            # (matches the build_payload signature and keeps the dev experience consistent).
             if isinstance(input_value, list) and len(input_value) == 2:
-                if emit_nodes and nodes_map:
+                if nodes_map:
                     # Reuse the same Nodes.Class.SLOT reference as build_payload defaults.
                     schema_default_code = default_code
                 else:
@@ -494,20 +489,19 @@ def run_dynamic_generator(
             code_lines.append(f"{alias} = Literal[{joined}]")
 
     # Nodes namespace — one inner class per workflow node, slots as tuple constants
-    if emit_nodes:
-        code_lines.append("")
-        code_lines.append("")
-        code_lines.append("# --- Workflow Node Connections ---")
-        code_lines.append("class Nodes:")
-        for nid, ninfo in nodes_map.items():
-            code_lines.append(
-                f"    class {ninfo['class_name']}:  # node {nid} · {ninfo['title']}"
-            )
-            if ninfo["slots"]:
-                for idx, slot in enumerate(ninfo["slots"]):
-                    code_lines.append(f"        {slot} = ({repr(nid)}, {idx})")
-            else:
-                code_lines.append("        pass")
+    code_lines.append("")
+    code_lines.append("")
+    code_lines.append("# --- Workflow Node Connections ---")
+    code_lines.append("class Nodes:")
+    for nid, ninfo in nodes_map.items():
+        code_lines.append(
+            f"    class {ninfo['class_name']}:  # node {nid} · {ninfo['title']}"
+        )
+        if ninfo["slots"]:
+            for idx, slot in enumerate(ninfo["slots"]):
+                code_lines.append(f"        {slot} = ({repr(nid)}, {idx})")
+        else:
+            code_lines.append("        pass")
 
     # Emit _RANGES: numeric constraints for runtime validation.
     if emit_ranges:
@@ -674,39 +668,27 @@ def run_dynamic_generator(
     )
 
     if emit_schema:
-        if emit_nodes:
-            # _SCHEMA contains live Nodes.X.SLOT tuples as defaults — convert
-            # them to [node_id, slot_index] lists so the result is json.dumps()-safe.
-            code_lines.extend(
-                [
-                    "    @classmethod",
-                    "    def schema(cls) -> Dict[str, Any]:",
-                    '        """Return a JSON-serializable description of all build_payload parameters.',
-                    "",
-                    "        Connection defaults (Nodes.* tuples) are converted to",
-                    "        [node_id, slot_index] lists so the result is json.dumps()-safe.",
-                    '        """',
-                    "        out = {}",
-                    "        for k, v in _SCHEMA.items():",
-                    "            entry = dict(v)",
-                    "            if isinstance(entry.get('default'), tuple):",
-                    "                entry['default'] = list(entry['default'])",
-                    "            out[k] = entry",
-                    "        return out",
-                    "",
-                ]
-            )
-        else:
-            # _SCHEMA only contains plain JSON-safe values — return directly.
-            code_lines.extend(
-                [
-                    "    @classmethod",
-                    "    def schema(cls) -> Dict[str, Any]:",
-                    '        """Return a JSON-serializable description of all build_payload parameters."""',
-                    "        return _SCHEMA",
-                    "",
-                ]
-            )
+        # _SCHEMA contains live Nodes.X.SLOT tuples as defaults — convert
+        # them to [node_id, slot_index] lists so the result is json.dumps()-safe.
+        code_lines.extend(
+            [
+                "    @classmethod",
+                "    def schema(cls) -> Dict[str, Any]:",
+                '        """Return a JSON-serializable description of all build_payload parameters.',
+                "",
+                "        Connection defaults (Nodes.* tuples) are converted to",
+                "        [node_id, slot_index] lists so the result is json.dumps()-safe.",
+                '        """',
+                "        out = {}",
+                "        for k, v in _SCHEMA.items():",
+                "            entry = dict(v)",
+                "            if isinstance(entry.get('default'), tuple):",
+                "                entry['default'] = list(entry['default'])",
+                "            out[k] = entry",
+                "        return out",
+                "",
+            ]
+        )
 
     if emit_validate_connections:
         code_lines.append("    @validate_connections")
@@ -824,7 +806,7 @@ def _build_arg_parser():
         help=(
             "Disable all optional features (equivalent to combining all --no-* flags). "
             "Produces the leanest possible output with no validation, no schema, "
-            "no docstrings, and no Nodes namespace."
+            "and no docstrings."
         ),
     )
     feat.add_argument(
@@ -878,12 +860,6 @@ def _build_arg_parser():
         dest="no_docstrings",
         help="Omit the Args: docstring block from build_payload.",
     )
-    feat.add_argument(
-        "--no-nodes",
-        action="store_true",
-        dest="no_nodes",
-        help="Omit the class Nodes: namespace from the generated file.",
-    )
     return p
 
 
@@ -900,7 +876,6 @@ if __name__ == "__main__":
     no_ranges = args.no_ranges or args.release
     no_output_types = args.no_output_types or args.release
     no_docstrings = args.no_docstrings or args.release
-    no_nodes = args.no_nodes or args.release
 
     try:
         run_dynamic_generator(
@@ -914,7 +889,6 @@ if __name__ == "__main__":
             emit_ranges=not no_ranges,
             emit_output_types=not no_output_types,
             emit_docstrings=not no_docstrings,
-            emit_nodes=not no_nodes,
         )
     except (ValueError, RuntimeError) as exc:
         print(f"ERROR: {exc}")
