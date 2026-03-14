@@ -15,7 +15,11 @@ pip install comfy-api-generator
 Make sure ComfyUI is running, then point the generator at your exported `workflow_api.json`:
 
 ```bash
+# As an installed command
 comfy-gen --workflow workflow_api.json --out generated_client.py
+
+# Or via the module directly
+python -m comfy_api_generator --workflow workflow_api.json --out generated_client.py
 ```
 
 Use the generated facade:
