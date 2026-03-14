@@ -234,33 +234,29 @@ def run_dynamic_generator(
     # 0. Validate flag combinations
     # ------------------------------------------------------------------
     if emit_validate_enums and not emit_schema:
-        print(
-            "ERROR: --no-schema cannot be used when enum validation is enabled.\n"
-            "       validate_enums reads from _SCHEMA at runtime.\n"
-            "       Add --no-validate-enums or remove --no-schema."
+        raise ValueError(
+            "--no-schema cannot be used when enum validation is enabled. "
+            "validate_enums reads from _SCHEMA at runtime. "
+            "Add --no-validate-enums or remove --no-schema."
         )
-        sys.exit(1)
     if emit_validate_connections and not emit_schema:
-        print(
-            "ERROR: --no-schema cannot be used when connection validation is enabled.\n"
-            "       validate_connections reads from _SCHEMA at runtime.\n"
-            "       Add --no-validate-connections or remove --no-schema."
+        raise ValueError(
+            "--no-schema cannot be used when connection validation is enabled. "
+            "validate_connections reads from _SCHEMA at runtime. "
+            "Add --no-validate-connections or remove --no-schema."
         )
-        sys.exit(1)
     if emit_validate_connections and not emit_output_types:
-        print(
-            "ERROR: --no-output-types cannot be used when connection validation is enabled.\n"
-            "       validate_connections reads from _OUTPUT_TYPES at runtime.\n"
-            "       Add --no-validate-connections or remove --no-output-types."
+        raise ValueError(
+            "--no-output-types cannot be used when connection validation is enabled. "
+            "validate_connections reads from _OUTPUT_TYPES at runtime. "
+            "Add --no-validate-connections or remove --no-output-types."
         )
-        sys.exit(1)
     if emit_validate_ranges and not emit_ranges:
-        print(
-            "ERROR: --no-ranges cannot be used when range validation is enabled.\n"
-            "       validate_ranges reads from _RANGES at runtime.\n"
-            "       Add --no-validate-ranges or remove --no-ranges."
+        raise ValueError(
+            "--no-ranges cannot be used when range validation is enabled. "
+            "validate_ranges reads from _RANGES at runtime. "
+            "Add --no-validate-ranges or remove --no-ranges."
         )
-        sys.exit(1)
 
     # ------------------------------------------------------------------
     # 1. Load the graph template
@@ -276,9 +272,9 @@ def run_dynamic_generator(
         resp.raise_for_status()
         object_info = resp.json()
     except requests.RequestException as exc:
-        print(f"ERROR: Could not reach ComfyUI at {comfyui_url}/object_info")
-        print(f"       {exc}")
-        sys.exit(1)
+        raise RuntimeError(
+            f"Could not reach ComfyUI at {comfyui_url}/object_info: {exc}"
+        ) from exc
 
     # ------------------------------------------------------------------
     # 3. Build nodes_map: all workflow nodes → class names + output slots
@@ -399,6 +395,21 @@ def run_dynamic_generator(
                 input_value, nodes_map if emit_nodes else None
             )
             default_code = default_fmt[3:] if default_fmt.startswith(" = ") else ""
+            # For _SCHEMA defaults on connection inputs:
+            # - When emit_nodes is True, use Nodes.X.SLOT references (matches
+            #   the build_payload signature and keeps the dev experience consistent).
+            # - When emit_nodes is False (release mode), fall back to plain
+            #   JSON-serializable lists so json.dumps(schema()) still works.
+            if isinstance(input_value, list) and len(input_value) == 2:
+                if emit_nodes and nodes_map:
+                    # Reuse the same Nodes.Class.SLOT reference as build_payload defaults.
+                    schema_default_code = default_code
+                else:
+                    ref_id = str(input_value[0])
+                    out_idx = int(input_value[1])
+                    schema_default_code = f"[{repr(ref_id)}, {out_idx}]"
+            else:
+                schema_default_code = default_code
             choices = discovered_enums.get(py_type)
             # Resolve raw ComfyUI type for connection provenance validation.
             _raw_comfy_type = None
@@ -414,6 +425,7 @@ def run_dynamic_generator(
                     "name": arg_name,
                     "type": py_type,
                     "default_code": default_code,
+                    "schema_default_code": schema_default_code,
                     "min": mn,
                     "max": mx,
                     "description": tooltip,
@@ -432,8 +444,6 @@ def run_dynamic_generator(
             f"in {workflow_path}. The generated class will have no parameters."
         )
 
-    # ------------------------------------------------------------------
-    # 4. Build the generated source code
     # ------------------------------------------------------------------
     # 4. Build the generated source code
     # ------------------------------------------------------------------
@@ -512,8 +522,8 @@ def run_dynamic_generator(
         for entry in schema_entries:
             code_lines.append(f"    {repr(entry['name'])}: {{")
             code_lines.append(f"        'type': {repr(entry['type'])},")
-            if entry["default_code"]:
-                code_lines.append(f"        'default': {entry['default_code']},")
+            if entry["schema_default_code"]:
+                code_lines.append(f"        'default': {entry['schema_default_code']},")
             if entry["min"] is not None:
                 code_lines.append(f"        'min': {entry['min']!r},")
             if entry["max"] is not None:
@@ -555,6 +565,7 @@ def run_dynamic_generator(
                 '    """Decorator: validates ComfyConnection shape and type provenance at runtime."""',
                 "    @functools.wraps(func)",
                 "    def wrapper(self, *args, **kwargs):",
+                "        errors = []",
                 "        for key, val in kwargs.items():",
                 "            if isinstance(val, (tuple, list)):",
                 "                if (",
@@ -562,18 +573,21 @@ def run_dynamic_generator(
                 "                    or not isinstance(val[0], str)",
                 "                    or not isinstance(val[1], int)",
                 "                ):",
-                "                    raise ValueError(",
+                "                    errors.append(",
                 "                        f\"Argument '{key}' expected "
                 '(NodeID: str, OutputIndex: int), got {val}"',
                 "                    )",
+                "                    continue",
                 "                expected_type = _SCHEMA.get(key, {}).get('comfy_type')",
                 "                if expected_type:",
                 "                    actual_type = _OUTPUT_TYPES.get((val[0], val[1]))",
                 "                    if actual_type and actual_type != expected_type:",
-                "                        raise ValueError(",
+                "                        errors.append(",
                 "                            f\"Argument '{key}' expects a {expected_type!r} connection, \"",
                 '                            f"but node {val[0]!r} output {val[1]} produces {actual_type!r}"',
                 "                        )",
+                "        if errors:",
+                r"""            raise ValueError('\n'.join(errors))""",
                 "        return func(self, *args, **kwargs)",
                 "    return wrapper",
                 "",
@@ -588,13 +602,16 @@ def run_dynamic_generator(
                 '    """Decorator that validates numeric argument ranges at runtime."""',
                 "    @functools.wraps(func)",
                 "    def wrapper(self, *args, **kwargs):",
+                "        errors = []",
                 "        for key, val in kwargs.items():",
                 "            if key in _RANGES and isinstance(val, (int, float)):",
                 "                lo, hi = _RANGES[key]",
-                "                if not (lo <= val <= hi):",
-                "                    raise ValueError(",
+                "                if (lo is not None and val < lo) or (hi is not None and val > hi):",
+                "                    errors.append(",
                 "                        f\"Argument '{key}' must be between {lo} and {hi}, got {val}\"",
                 "                    )",
+                "        if errors:",
+                r"""            raise ValueError('\n'.join(errors))""",
                 "        return func(self, *args, **kwargs)",
                 "    return wrapper",
                 "",
@@ -609,18 +626,23 @@ def run_dynamic_generator(
                 '    """Decorator that validates Literal/enum argument choices at runtime."""',
                 "    @functools.wraps(func)",
                 "    def wrapper(self, *args, **kwargs):",
+                "        errors = []",
                 "        for key, val in kwargs.items():",
                 "            choices = _SCHEMA.get(key, {}).get('choices')",
                 "            if choices is not None and val not in choices:",
-                "                raise ValueError(",
+                "                errors.append(",
                 "                    f\"Argument '{key}' must be one of {choices!r}, got {val!r}\"",
                 "                )",
+                "        if errors:",
+                r"""            raise ValueError('\n'.join(errors))""",
                 "        return func(self, *args, **kwargs)",
                 "    return wrapper",
                 "",
                 "",
             ]
         )
+
+    param_count = len(schema_entries)
 
     code_lines.extend(
         [
@@ -630,6 +652,10 @@ def run_dynamic_generator(
             f"    def __init__(self, template_path: str = '{workflow_path}') -> None:",
             "        with open(template_path, 'r', encoding='utf-8') as f:",
             "            self.base_workflow = json.load(f)",
+            "        self._template_path = template_path",
+            "",
+            "    def __repr__(self) -> str:",
+            f'        return f"ComfyWorkflowAPI(template={{self._template_path!r}}, params={param_count})"',
             "",
         ]
     )
@@ -826,19 +852,23 @@ if __name__ == "__main__":
     no_docstrings = args.no_docstrings or args.release
     no_nodes = args.no_nodes or args.release
 
-    run_dynamic_generator(
-        workflow_path=args.workflow,
-        output_path=args.out,
-        comfyui_url=args.url,
-        emit_validate_enums=not no_validate_enums,
-        emit_validate_ranges=not no_validate_ranges,
-        emit_validate_connections=not no_validate_connections,
-        emit_schema=not no_schema,
-        emit_ranges=not no_ranges,
-        emit_output_types=not no_output_types,
-        emit_docstrings=not no_docstrings,
-        emit_nodes=not no_nodes,
-    )
+    try:
+        run_dynamic_generator(
+            workflow_path=args.workflow,
+            output_path=args.out,
+            comfyui_url=args.url,
+            emit_validate_enums=not no_validate_enums,
+            emit_validate_ranges=not no_validate_ranges,
+            emit_validate_connections=not no_validate_connections,
+            emit_schema=not no_schema,
+            emit_ranges=not no_ranges,
+            emit_output_types=not no_output_types,
+            emit_docstrings=not no_docstrings,
+            emit_nodes=not no_nodes,
+        )
+    except (ValueError, RuntimeError) as exc:
+        print(f"ERROR: {exc}")
+        sys.exit(1)
     if args.examples:
         import os, textwrap
 
@@ -883,7 +913,10 @@ if __name__ == "__main__":
             ws.connect(f"{{WS_URL}}/ws?clientId={{client_id}}")
             try:
                 while True:
-                    msg = json.loads(ws.recv())
+                    raw = ws.recv()
+                    if isinstance(raw, bytes):
+                        continue  # skip binary preview frames
+                    msg = json.loads(raw)
                     t = msg.get("type")
                     if t == "progress":
                         d = msg["data"]

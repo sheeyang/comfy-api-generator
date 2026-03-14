@@ -187,6 +187,7 @@ def validate_connections(func):
     """Decorator: validates ComfyConnection shape and type provenance at runtime."""
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
+        errors = []
         for key, val in kwargs.items():
             if isinstance(val, (tuple, list)):
                 if (
@@ -194,17 +195,20 @@ def validate_connections(func):
                     or not isinstance(val[0], str)
                     or not isinstance(val[1], int)
                 ):
-                    raise ValueError(
+                    errors.append(
                         f"Argument '{key}' expected (NodeID: str, OutputIndex: int), got {val}"
                     )
+                    continue
                 expected_type = _SCHEMA.get(key, {}).get('comfy_type')
                 if expected_type:
                     actual_type = _OUTPUT_TYPES.get((val[0], val[1]))
                     if actual_type and actual_type != expected_type:
-                        raise ValueError(
+                        errors.append(
                             f"Argument '{key}' expects a {expected_type!r} connection, "
                             f"but node {val[0]!r} output {val[1]} produces {actual_type!r}"
                         )
+        if errors:
+            raise ValueError('\n'.join(errors))
         return func(self, *args, **kwargs)
     return wrapper
 
@@ -213,13 +217,16 @@ def validate_ranges(func):
     """Decorator that validates numeric argument ranges at runtime."""
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
+        errors = []
         for key, val in kwargs.items():
             if key in _RANGES and isinstance(val, (int, float)):
                 lo, hi = _RANGES[key]
-                if not (lo <= val <= hi):
-                    raise ValueError(
+                if (lo is not None and val < lo) or (hi is not None and val > hi):
+                    errors.append(
                         f"Argument '{key}' must be between {lo} and {hi}, got {val}"
                     )
+        if errors:
+            raise ValueError('\n'.join(errors))
         return func(self, *args, **kwargs)
     return wrapper
 
@@ -228,12 +235,15 @@ def validate_enums(func):
     """Decorator that validates Literal/enum argument choices at runtime."""
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
+        errors = []
         for key, val in kwargs.items():
             choices = _SCHEMA.get(key, {}).get('choices')
             if choices is not None and val not in choices:
-                raise ValueError(
+                errors.append(
                     f"Argument '{key}' must be one of {choices!r}, got {val!r}"
                 )
+        if errors:
+            raise ValueError('\n'.join(errors))
         return func(self, *args, **kwargs)
     return wrapper
 
@@ -244,6 +254,10 @@ class ComfyWorkflowAPI:
     def __init__(self, template_path: str = 'workflow_api.json') -> None:
         with open(template_path, 'r', encoding='utf-8') as f:
             self.base_workflow = json.load(f)
+        self._template_path = template_path
+
+    def __repr__(self) -> str:
+        return f"ComfyWorkflowAPI(template={self._template_path!r}, params=18)"
 
     @classmethod
     def schema(cls) -> Dict[str, Any]:

@@ -18,7 +18,7 @@ import websocket  # pip install websocket-client
 from generated_client import ComfyWorkflowAPI
 
 COMFYUI_URL = "http://127.0.0.1:8188"
-WS_URL      = "ws://127.0.0.1:8188/ws"
+WS_URL = "ws://127.0.0.1:8188/ws"
 
 client_id = str(uuid.uuid4())
 api = ComfyWorkflowAPI()
@@ -43,9 +43,11 @@ print(f"Submitted prompt {prompt_id}")
 
 while True:
     raw = ws.recv()
+    if isinstance(raw, bytes):
+        continue  # skip binary preview frames
     msg = json.loads(raw)
     mtype = msg.get("type")
-    data  = msg.get("data", {})
+    data = msg.get("data", {})
 
     if mtype == "executing":
         print(f"  Running node: {data.get('node')}")
