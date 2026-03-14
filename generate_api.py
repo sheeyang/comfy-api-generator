@@ -461,8 +461,7 @@ def run_dynamic_generator(
         typing_names.append("NewType")
     if discovered_enums:
         typing_names.append("Literal")
-    if emit_output_types or discovered_custom_types:
-        typing_names.append("Tuple")
+    typing_names.append("Tuple")  # always needed for ComfyConnection = Tuple[str, int]
     imports.append(f"from typing import {', '.join(sorted(typing_names))}")
 
     code_lines: list[str] = [
