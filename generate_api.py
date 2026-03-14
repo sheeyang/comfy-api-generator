@@ -451,7 +451,7 @@ def run_dynamic_generator(
         emit_validate_enums or emit_validate_ranges or emit_validate_connections
     )
 
-    imports = ["import copy", "import json"]
+    imports = ["import json"]
     if any_validator:
         imports.append("import functools")
     typing_names = ["Any", "Dict"]
@@ -719,7 +719,11 @@ def run_dynamic_generator(
             else:
                 code_lines.append(f"            {arg_name}:")
     code_lines.append('        """')
-    code_lines.append("        workflow = copy.deepcopy(self.base_workflow)")
+    code_lines.append("        workflow = {}")
+    code_lines.append("        for _id, _node in self.base_workflow.items():")
+    code_lines.append(
+        "            workflow[_id] = {**_node, 'inputs': dict(_node.get('inputs', {}))}"
+    )
     code_lines.extend(assignments)
     code_lines.append("        return {'prompt': workflow}")
     code_lines.append("")  # trailing newline
