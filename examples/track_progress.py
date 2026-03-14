@@ -1,67 +1,46 @@
 """
 Progress-tracking usage example for the generated ComfyUI workflow facade.
 
-Requires: pip install websocket-client
+Requires: pip install aiohttp
 
-Connects to ComfyUI's WebSocket before submitting the prompt so that
-step-level sampler progress and per-node execution events are streamed
-in real time.
+Uses the async run() generator to stream progress events in real time.
+Suitable for piping into SSE or any streaming response in your API server.
 
 Run generate_api.py first to produce generated_client.py, then run:
     python examples/track_progress.py
 """
 
-import json
-import uuid
-import requests
-import websocket  # pip install websocket-client
+import asyncio
 from generated_client import ComfyWorkflowAPI
 
 COMFYUI_URL = "http://127.0.0.1:8188"
-WS_URL = "ws://127.0.0.1:8188/ws"
 
-client_id = str(uuid.uuid4())
-api = ComfyWorkflowAPI()
 
-payload = api.build_payload(
-    load_checkpoint_ckpt_name="SD1.5\\v1-5-pruned-emaonly.safetensors",
-    clip_text_encode__prompt__text_6="beautiful scenery nature glass bottle landscape",
-    clip_text_encode__prompt__text_7="text, watermark",
-    empty_latent_image_width=512,
-    empty_latent_image_height=512,
-)
-# Attach client_id so ComfyUI routes events back to our WebSocket
-payload["client_id"] = client_id
+async def main():
+    api = ComfyWorkflowAPI()
 
-# Connect first, then submit
-ws = websocket.WebSocket()
-ws.connect(f"{WS_URL}?clientId={client_id}")
+    async for event in api.run(
+        comfyui_url=COMFYUI_URL,
+        load_checkpoint_ckpt_name="SD1.5\\v1-5-pruned-emaonly.safetensors",
+        clip_text_encode__prompt__text_6="beautiful scenery nature glass bottle landscape",
+        clip_text_encode__prompt__text_7="text, watermark",
+        empty_latent_image_width=512,
+        empty_latent_image_height=512,
+    ):
+        if event["type"] == "queued":
+            print(f"Submitted prompt {event['prompt_id']}")
 
-response = requests.post(f"{COMFYUI_URL}/prompt", json=payload)
-prompt_id = response.json()["prompt_id"]
-print(f"Submitted prompt {prompt_id}")
+        elif event["type"] == "executing":
+            print(f"  Running node: {event['node_id']}")
 
-while True:
-    raw = ws.recv()
-    if isinstance(raw, bytes):
-        continue  # skip binary preview frames
-    msg = json.loads(raw)
-    mtype = msg.get("type")
-    data = msg.get("data", {})
+        elif event["type"] == "progress":
+            print(f"  Sampling: {event['step']}/{event['max']}  ({event['pct']}%)")
 
-    if mtype == "executing":
-        print(f"  Running node: {data.get('node')}")
+        elif event["type"] == "execution_success":
+            print("Done!")
 
-    elif mtype == "progress":
-        pct = int(data["value"] / data["max"] * 100)
-        print(f"  Sampling: {data['value']}/{data['max']}  ({pct}%)")
+        elif event["type"] == "execution_error":
+            print(f"Error: {event['detail']}")
 
-    elif mtype == "execution_success":
-        print("Done!")
-        break
 
-    elif mtype == "execution_error":
-        print(f"Error: {data}")
-        break
-
-ws.close()
+asyncio.run(main())

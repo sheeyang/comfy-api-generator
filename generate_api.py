@@ -217,6 +217,7 @@ def run_dynamic_generator(
     emit_schema: bool = True,
     emit_ranges: bool = True,
     emit_docstrings: bool = True,
+    emit_http: bool = True,
 ) -> None:
     """Main entry point: parse workflow + schema, then emit generated_client.py.
 
@@ -227,6 +228,7 @@ def run_dynamic_generator(
         emit_schema:               include the _SCHEMA dict and schema() classmethod
         emit_ranges:               include the _RANGES dict
         emit_docstrings:           include the Args: docstring block in build_payload
+        emit_http:                 include submit() and run() helper methods
 
     Conflict rules (hard errors):
         emit_validate_enums=True  requires emit_schema=True
@@ -448,7 +450,12 @@ def run_dynamic_generator(
     imports = ["import json"]
     if any_validator:
         imports.append("import functools")
+    if emit_http:
+        imports.append("import uuid")
+        imports.append("import aiohttp")
     typing_names = ["Any", "Dict"]
+    if emit_http:
+        typing_names.append("AsyncGenerator")
     if discovered_custom_types:
         typing_names.append("NewType")
     if discovered_enums:
@@ -719,6 +726,136 @@ def run_dynamic_generator(
     ]
     code_lines.extend(assignments)
     code_lines.append("        return {'prompt': workflow}")
+
+    # ------------------------------------------------------------------
+    # 4b. Emit submit() and run() helper methods
+    # ------------------------------------------------------------------
+    if emit_http:
+        code_lines.append("")
+        # --- submit() ---
+        code_lines.append("    def submit(")
+        code_lines.append("        self,")
+        code_lines.append("        comfyui_url: str = 'http://127.0.0.1:8188',")
+        code_lines.append("        **kwargs,")
+        code_lines.append("    ) -> str:")
+        code_lines.append(
+            '        """Submit the workflow to ComfyUI and return the prompt_id.'
+        )
+        code_lines.append("")
+        code_lines.append(
+            "        Fire-and-forget: posts the prompt and returns immediately."
+        )
+        code_lines.append(
+            "        All keyword arguments are forwarded to build_payload()."
+        )
+        code_lines.append("")
+        code_lines.append("        Args:")
+        code_lines.append("            comfyui_url: Base URL of the ComfyUI instance.")
+        code_lines.append("            **kwargs: Forwarded to build_payload().")
+        code_lines.append("")
+        code_lines.append("        Returns:")
+        code_lines.append("            The prompt_id string assigned by ComfyUI.")
+        code_lines.append('        """')
+        code_lines.append("        import requests as _requests")
+        code_lines.append("        payload = self.build_payload(**kwargs)")
+        code_lines.append(
+            "        resp = _requests.post(f'{comfyui_url}/prompt', json=payload)"
+        )
+        code_lines.append("        resp.raise_for_status()")
+        code_lines.append("        return resp.json()['prompt_id']")
+
+        code_lines.append("")
+        # --- run() ---
+        code_lines.append("    async def run(")
+        code_lines.append("        self,")
+        code_lines.append("        comfyui_url: str = 'http://127.0.0.1:8188',")
+        code_lines.append("        **kwargs,")
+        code_lines.append("    ) -> AsyncGenerator[Dict[str, Any], None]:")
+        code_lines.append(
+            '        """Submit the workflow and yield progress events until completion.'
+        )
+        code_lines.append("")
+        code_lines.append(
+            "        Connects to ComfyUI's WebSocket before submitting so no events"
+        )
+        code_lines.append(
+            "        are missed. Yields structured dicts suitable for piping into SSE"
+        )
+        code_lines.append("        or any streaming response.")
+        code_lines.append("")
+        code_lines.append("        Yielded event shapes:")
+        code_lines.append("            {'type': 'queued',            'prompt_id': str}")
+        code_lines.append("            {'type': 'executing',         'node_id': str}")
+        code_lines.append(
+            "            {'type': 'progress',          'step': int, 'max': int, 'pct': int}"
+        )
+        code_lines.append("            {'type': 'execution_success', 'prompt_id': str}")
+        code_lines.append("            {'type': 'execution_error',   'detail': dict}")
+        code_lines.append("")
+        code_lines.append("        Args:")
+        code_lines.append("            comfyui_url: Base URL of the ComfyUI instance.")
+        code_lines.append("            **kwargs: Forwarded to build_payload().")
+        code_lines.append('        """')
+        code_lines.append("        payload = self.build_payload(**kwargs)")
+        code_lines.append("        client_id = str(uuid.uuid4())")
+        code_lines.append("        payload['client_id'] = client_id")
+        code_lines.append("        ws_url = comfyui_url.replace('http', 'ws', 1)")
+        code_lines.append("")
+        code_lines.append("        async with aiohttp.ClientSession() as session:")
+        code_lines.append(
+            "            async with session.ws_connect(f'{ws_url}/ws?clientId={client_id}') as ws:"
+        )
+        code_lines.append(
+            "                async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:"
+        )
+        code_lines.append("                    resp.raise_for_status()")
+        code_lines.append("                    data = await resp.json()")
+        code_lines.append("                    prompt_id = data['prompt_id']")
+        code_lines.append(
+            "                yield {'type': 'queued', 'prompt_id': prompt_id}"
+        )
+        code_lines.append("")
+        code_lines.append("                async for msg in ws:")
+        code_lines.append(
+            "                    if msg.type == aiohttp.WSMsgType.BINARY:"
+        )
+        code_lines.append("                        continue")
+        code_lines.append(
+            "                    if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):"
+        )
+        code_lines.append("                        break")
+        code_lines.append("                    event = json.loads(msg.data)")
+        code_lines.append("                    etype = event.get('type')")
+        code_lines.append("                    edata = event.get('data', {})")
+        code_lines.append("")
+        code_lines.append("                    if etype == 'executing':")
+        code_lines.append("                        node = edata.get('node')")
+        code_lines.append("                        if node is not None:")
+        code_lines.append(
+            "                            yield {'type': 'executing', 'node_id': node}"
+        )
+        code_lines.append(
+            "                        elif edata.get('prompt_id') == prompt_id:"
+        )
+        code_lines.append(
+            "                            yield {'type': 'execution_success', 'prompt_id': prompt_id}"
+        )
+        code_lines.append("                            return")
+        code_lines.append("                    elif etype == 'progress':")
+        code_lines.append("                        step = edata['value']")
+        code_lines.append("                        mx = edata['max']")
+        code_lines.append(
+            "                        pct = int(step / mx * 100) if mx else 0"
+        )
+        code_lines.append(
+            "                        yield {'type': 'progress', 'step': step, 'max': mx, 'pct': pct}"
+        )
+        code_lines.append("                    elif etype == 'execution_error':")
+        code_lines.append(
+            "                        yield {'type': 'execution_error', 'detail': edata}"
+        )
+        code_lines.append("                        return")
+
     code_lines.append("")  # trailing newline
 
     # ------------------------------------------------------------------
@@ -842,6 +979,15 @@ def _build_arg_parser():
         dest="no_docstrings",
         help="Omit the Args: docstring block from build_payload.",
     )
+    feat.add_argument(
+        "--no-http",
+        action="store_true",
+        dest="no_http",
+        help=(
+            "Omit the submit() and run() helper methods from the generated file. "
+            "Only build_payload() will be available."
+        ),
+    )
     return p
 
 
@@ -857,6 +1003,7 @@ if __name__ == "__main__":
     no_schema = args.no_schema or args.release
     no_ranges = args.no_ranges or args.release
     no_docstrings = args.no_docstrings or args.release
+    no_http = args.no_http or args.release
 
     try:
         run_dynamic_generator(
@@ -869,6 +1016,7 @@ if __name__ == "__main__":
             emit_schema=not no_schema,
             emit_ranges=not no_ranges,
             emit_docstrings=not no_docstrings,
+            emit_http=not no_http,
         )
     except (ValueError, RuntimeError) as exc:
         print(f"ERROR: {exc}")
@@ -881,59 +1029,37 @@ if __name__ == "__main__":
 
         basic = textwrap.dedent(f"""\
             \"\"\"Basic usage example — submit a prompt and print the prompt_id.\"\"\"
-            import uuid, requests
             from {client_module} import ComfyWorkflowAPI
 
             COMFY_URL = "{args.url}"
 
             api = ComfyWorkflowAPI()
-            payload = api.build_payload()
-            payload["client_id"] = str(uuid.uuid4())
-
-            resp = requests.post(f"{{COMFY_URL}}/prompt", json=payload)
-            resp.raise_for_status()
-            print("Queued prompt:", resp.json()["prompt_id"])
+            prompt_id = api.submit(comfyui_url=COMFY_URL)
+            print("Queued prompt:", prompt_id)
             """)
 
         track = textwrap.dedent(f"""\
-            \"\"\"Track generation progress via WebSocket.\"\"\"
-            import uuid, json, websocket, requests
+            \"\"\"Track generation progress via the async run() generator.\"\"\"
+            import asyncio, json
             from {client_module} import ComfyWorkflowAPI
 
             COMFY_URL = "{args.url}"
-            WS_URL   = COMFY_URL.replace("http", "ws", 1)
 
-            client_id = str(uuid.uuid4())
-            api = ComfyWorkflowAPI()
-            payload = api.build_payload()
-            payload["client_id"] = client_id
-
-            resp = requests.post(f"{{COMFY_URL}}/prompt", json=payload)
-            resp.raise_for_status()
-            prompt_id = resp.json()["prompt_id"]
-            print(f"Queued: {{prompt_id}}")
-
-            ws = websocket.WebSocket()
-            ws.connect(f"{{WS_URL}}/ws?clientId={{client_id}}")
-            try:
-                while True:
-                    raw = ws.recv()
-                    if isinstance(raw, bytes):
-                        continue  # skip binary preview frames
-                    msg = json.loads(raw)
-                    t = msg.get("type")
-                    if t == "progress":
-                        d = msg["data"]
-                        pct = int(d["value"] / d["max"] * 100)
-                        print(f"  Step {{d['value']}}/{{d['max']}}  ({{pct}}%)")
-                    elif t == "execution_success":
+            async def main():
+                api = ComfyWorkflowAPI()
+                async for event in api.run(comfyui_url=COMFY_URL):
+                    if event["type"] == "queued":
+                        print(f"Queued: {{event['prompt_id']}}")
+                    elif event["type"] == "executing":
+                        print(f"  Running node: {{event['node_id']}}")
+                    elif event["type"] == "progress":
+                        print(f"  Step {{event['step']}}/{{event['max']}}  ({{event['pct']}}%)")
+                    elif event["type"] == "execution_success":
                         print("Done!")
-                        break
-                    elif t == "execution_error":
-                        print("Error:", msg["data"])
-                        break
-            finally:
-                ws.close()
+                    elif event["type"] == "execution_error":
+                        print("Error:", event["detail"])
+
+            asyncio.run(main())
             """)
 
         for fname, content in [("basic_usage.py", basic), ("track_progress.py", track)]:
