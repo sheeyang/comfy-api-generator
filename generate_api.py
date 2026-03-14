@@ -34,7 +34,9 @@ def _enum_alias_name(arg_name: str) -> str:
     return "".join(word.capitalize() for word in arg_name.split("_"))
 
 
-def _format_default(input_value, nodes_map: dict | None = None) -> str:
+def _format_default(
+    input_value, nodes_map: dict | None = None, context: str = ""
+) -> str:
     """
     Return a ' = <value>' default snippet from the workflow's current value.
 
@@ -55,6 +57,11 @@ def _format_default(input_value, nodes_map: dict | None = None) -> str:
         return f" = {input_value}"
     if isinstance(input_value, str):
         return f" = {repr(input_value)}"
+    where = f" [{context}]" if context else ""
+    print(
+        f"WARNING{where}: unrecognised default value {input_value!r} "
+        f"(type: {type(input_value).__name__}) — parameter will be mandatory."
+    )
     return ""
 
 
@@ -388,7 +395,9 @@ def run_dynamic_generator(
             tooltip = _get_input_tooltip(class_type, input_name, object_info)
             mn, mx = _get_input_constraints(class_type, input_name, object_info)
             default_fmt = _format_default(
-                input_value, nodes_map if emit_nodes else None
+                input_value,
+                nodes_map if emit_nodes else None,
+                context=f"node {node_id} ({title}) › {input_name}",
             )
             default_code = default_fmt[3:] if default_fmt.startswith(" = ") else ""
             # For _SCHEMA defaults on connection inputs:
