@@ -661,25 +661,39 @@ def run_dynamic_generator(
     )
 
     if emit_schema:
-        code_lines.extend(
-            [
-                "    @classmethod",
-                "    def schema(cls) -> Dict[str, Any]:",
-                '        """Return a JSON-serializable description of all build_payload parameters.',
-                "",
-                "        Connection defaults (tuples from Nodes.*) are converted to",
-                "        [node_id, slot_index] lists so the result is json.dumps()-safe.",
-                '        """',
-                "        out = {}",
-                "        for k, v in _SCHEMA.items():",
-                "            entry = dict(v)",
-                "            if isinstance(entry.get('default'), tuple):",
-                "                entry['default'] = list(entry['default'])",
-                "            out[k] = entry",
-                "        return out",
-                "",
-            ]
-        )
+        if emit_nodes:
+            # _SCHEMA contains live Nodes.X.SLOT tuples as defaults — convert
+            # them to [node_id, slot_index] lists so the result is json.dumps()-safe.
+            code_lines.extend(
+                [
+                    "    @classmethod",
+                    "    def schema(cls) -> Dict[str, Any]:",
+                    '        """Return a JSON-serializable description of all build_payload parameters.',
+                    "",
+                    "        Connection defaults (Nodes.* tuples) are converted to",
+                    "        [node_id, slot_index] lists so the result is json.dumps()-safe.",
+                    '        """',
+                    "        out = {}",
+                    "        for k, v in _SCHEMA.items():",
+                    "            entry = dict(v)",
+                    "            if isinstance(entry.get('default'), tuple):",
+                    "                entry['default'] = list(entry['default'])",
+                    "            out[k] = entry",
+                    "        return out",
+                    "",
+                ]
+            )
+        else:
+            # _SCHEMA only contains plain JSON-safe values — return directly.
+            code_lines.extend(
+                [
+                    "    @classmethod",
+                    "    def schema(cls) -> Dict[str, Any]:",
+                    '        """Return a JSON-serializable description of all build_payload parameters."""',
+                    "        return _SCHEMA",
+                    "",
+                ]
+            )
 
     if emit_validate_connections:
         code_lines.append("    @validate_connections")

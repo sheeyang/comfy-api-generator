@@ -263,7 +263,7 @@ class ComfyWorkflowAPI:
     def schema(cls) -> Dict[str, Any]:
         """Return a JSON-serializable description of all build_payload parameters.
 
-        Connection defaults (tuples from Nodes.*) are converted to
+        Connection defaults (Nodes.* tuples) are converted to
         [node_id, slot_index] lists so the result is json.dumps()-safe.
         """
         out = {}
