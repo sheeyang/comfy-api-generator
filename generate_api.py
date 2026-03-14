@@ -649,6 +649,8 @@ def run_dynamic_generator(
             "class ComfyWorkflowAPI:",
             '    """Type-safe facade over the ComfyUI workflow graph."""',
             "",
+            "    __slots__ = ('base_workflow', '_template_path')",
+            "",
             f"    def __init__(self, template_path: str = '{workflow_path}') -> None:",
             "        with open(template_path, 'r', encoding='utf-8') as f:",
             "            self.base_workflow = json.load(f)",
