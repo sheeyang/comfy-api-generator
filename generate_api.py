@@ -727,136 +727,126 @@ def run_dynamic_generator(
     code_lines.extend(assignments)
     code_lines.append("        return {'prompt': workflow}")
 
+    code_lines.append("")  # trailing newline after class
+
     # ------------------------------------------------------------------
-    # 4b. Emit submit() and run() helper methods
+    # 4b. Emit submit() and run() as module-level helper functions
     # ------------------------------------------------------------------
     if emit_http:
-        code_lines.append("")
         # --- submit() ---
-        code_lines.append("    def submit(")
-        code_lines.append("        self,")
-        code_lines.append("        comfyui_url: str = 'http://127.0.0.1:8188',")
-        code_lines.append("        **kwargs,")
-        code_lines.append("    ) -> str:")
-        code_lines.append(
-            '        """Submit the workflow to ComfyUI and return the prompt_id.'
-        )
+        code_lines.append("")
+        code_lines.append("def submit(")
+        code_lines.append("    payload: Dict[str, Any],")
+        code_lines.append("    comfyui_url: str = 'http://127.0.0.1:8188',")
+        code_lines.append(") -> str:")
+        code_lines.append('    """POST a payload to ComfyUI and return the prompt_id.')
         code_lines.append("")
         code_lines.append(
-            "        Fire-and-forget: posts the prompt and returns immediately."
-        )
-        code_lines.append(
-            "        All keyword arguments are forwarded to build_payload()."
+            "    Fire-and-forget: posts the prompt and returns immediately."
         )
         code_lines.append("")
-        code_lines.append("        Args:")
-        code_lines.append("            comfyui_url: Base URL of the ComfyUI instance.")
-        code_lines.append("            **kwargs: Forwarded to build_payload().")
+        code_lines.append("    Args:")
+        code_lines.append("        payload: The dict returned by build_payload().")
+        code_lines.append("        comfyui_url: Base URL of the ComfyUI instance.")
         code_lines.append("")
-        code_lines.append("        Returns:")
-        code_lines.append("            The prompt_id string assigned by ComfyUI.")
-        code_lines.append('        """')
-        code_lines.append("        import requests as _requests")
-        code_lines.append("        payload = self.build_payload(**kwargs)")
+        code_lines.append("    Returns:")
+        code_lines.append("        The prompt_id string assigned by ComfyUI.")
+        code_lines.append('    """')
+        code_lines.append("    import requests as _requests")
         code_lines.append(
-            "        resp = _requests.post(f'{comfyui_url}/prompt', json=payload)"
+            "    resp = _requests.post(f'{comfyui_url}/prompt', json=payload)"
         )
-        code_lines.append("        resp.raise_for_status()")
-        code_lines.append("        return resp.json()['prompt_id']")
+        code_lines.append("    resp.raise_for_status()")
+        code_lines.append("    return resp.json()['prompt_id']")
 
-        code_lines.append("")
         # --- run() ---
-        code_lines.append("    async def run(")
-        code_lines.append("        self,")
-        code_lines.append("        comfyui_url: str = 'http://127.0.0.1:8188',")
-        code_lines.append("        **kwargs,")
-        code_lines.append("    ) -> AsyncGenerator[Dict[str, Any], None]:")
+        code_lines.append("")
+        code_lines.append("")
+        code_lines.append("async def run(")
+        code_lines.append("    payload: Dict[str, Any],")
+        code_lines.append("    comfyui_url: str = 'http://127.0.0.1:8188',")
+        code_lines.append(") -> AsyncGenerator[Dict[str, Any], None]:")
         code_lines.append(
-            '        """Submit the workflow and yield progress events until completion.'
+            '    """Submit a payload and yield progress events until completion.'
         )
         code_lines.append("")
         code_lines.append(
-            "        Connects to ComfyUI's WebSocket before submitting so no events"
+            "    Connects to ComfyUI's WebSocket before submitting so no events"
         )
         code_lines.append(
-            "        are missed. Yields structured dicts suitable for piping into SSE"
+            "    are missed. Yields structured dicts suitable for piping into SSE"
         )
-        code_lines.append("        or any streaming response.")
+        code_lines.append("    or any streaming response.")
         code_lines.append("")
-        code_lines.append("        Yielded event shapes:")
-        code_lines.append("            {'type': 'queued',            'prompt_id': str}")
-        code_lines.append("            {'type': 'executing',         'node_id': str}")
+        code_lines.append("    Yielded event shapes:")
+        code_lines.append("        {'type': 'queued',            'prompt_id': str}")
+        code_lines.append("        {'type': 'executing',         'node_id': str}")
         code_lines.append(
-            "            {'type': 'progress',          'step': int, 'max': int, 'pct': int}"
+            "        {'type': 'progress',          'step': int, 'max': int, 'pct': int}"
         )
-        code_lines.append("            {'type': 'execution_success', 'prompt_id': str}")
-        code_lines.append("            {'type': 'execution_error',   'detail': dict}")
+        code_lines.append("        {'type': 'execution_success', 'prompt_id': str}")
+        code_lines.append("        {'type': 'execution_error',   'detail': dict}")
         code_lines.append("")
-        code_lines.append("        Args:")
-        code_lines.append("            comfyui_url: Base URL of the ComfyUI instance.")
-        code_lines.append("            **kwargs: Forwarded to build_payload().")
-        code_lines.append('        """')
-        code_lines.append("        payload = self.build_payload(**kwargs)")
-        code_lines.append("        client_id = str(uuid.uuid4())")
-        code_lines.append("        payload['client_id'] = client_id")
-        code_lines.append("        ws_url = comfyui_url.replace('http', 'ws', 1)")
+        code_lines.append("    Args:")
+        code_lines.append("        payload: The dict returned by build_payload().")
+        code_lines.append("        comfyui_url: Base URL of the ComfyUI instance.")
+        code_lines.append('    """')
+        code_lines.append("    payload = dict(payload)")
+        code_lines.append("    client_id = str(uuid.uuid4())")
+        code_lines.append("    payload['client_id'] = client_id")
+        code_lines.append("    ws_url = comfyui_url.replace('http', 'ws', 1)")
         code_lines.append("")
-        code_lines.append("        async with aiohttp.ClientSession() as session:")
+        code_lines.append("    async with aiohttp.ClientSession() as session:")
         code_lines.append(
-            "            async with session.ws_connect(f'{ws_url}/ws?clientId={client_id}') as ws:"
+            "        async with session.ws_connect(f'{ws_url}/ws?clientId={client_id}') as ws:"
         )
         code_lines.append(
-            "                async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:"
+            "            async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:"
         )
-        code_lines.append("                    resp.raise_for_status()")
-        code_lines.append("                    data = await resp.json()")
-        code_lines.append("                    prompt_id = data['prompt_id']")
+        code_lines.append("                resp.raise_for_status()")
+        code_lines.append("                data = await resp.json()")
+        code_lines.append("                prompt_id = data['prompt_id']")
         code_lines.append(
-            "                yield {'type': 'queued', 'prompt_id': prompt_id}"
+            "            yield {'type': 'queued', 'prompt_id': prompt_id}"
         )
         code_lines.append("")
-        code_lines.append("                async for msg in ws:")
+        code_lines.append("            async for msg in ws:")
+        code_lines.append("                if msg.type == aiohttp.WSMsgType.BINARY:")
+        code_lines.append("                    continue")
         code_lines.append(
-            "                    if msg.type == aiohttp.WSMsgType.BINARY:"
+            "                if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):"
         )
-        code_lines.append("                        continue")
-        code_lines.append(
-            "                    if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):"
-        )
-        code_lines.append("                        break")
-        code_lines.append("                    event = json.loads(msg.data)")
-        code_lines.append("                    etype = event.get('type')")
-        code_lines.append("                    edata = event.get('data', {})")
+        code_lines.append("                    break")
+        code_lines.append("                event = json.loads(msg.data)")
+        code_lines.append("                etype = event.get('type')")
+        code_lines.append("                edata = event.get('data', {})")
         code_lines.append("")
-        code_lines.append("                    if etype == 'executing':")
-        code_lines.append("                        node = edata.get('node')")
-        code_lines.append("                        if node is not None:")
+        code_lines.append("                if etype == 'executing':")
+        code_lines.append("                    node = edata.get('node')")
+        code_lines.append("                    if node is not None:")
         code_lines.append(
-            "                            yield {'type': 'executing', 'node_id': node}"
+            "                        yield {'type': 'executing', 'node_id': node}"
         )
         code_lines.append(
-            "                        elif edata.get('prompt_id') == prompt_id:"
+            "                    elif edata.get('prompt_id') == prompt_id:"
         )
         code_lines.append(
-            "                            yield {'type': 'execution_success', 'prompt_id': prompt_id}"
-        )
-        code_lines.append("                            return")
-        code_lines.append("                    elif etype == 'progress':")
-        code_lines.append("                        step = edata['value']")
-        code_lines.append("                        mx = edata['max']")
-        code_lines.append(
-            "                        pct = int(step / mx * 100) if mx else 0"
-        )
-        code_lines.append(
-            "                        yield {'type': 'progress', 'step': step, 'max': mx, 'pct': pct}"
-        )
-        code_lines.append("                    elif etype == 'execution_error':")
-        code_lines.append(
-            "                        yield {'type': 'execution_error', 'detail': edata}"
+            "                        yield {'type': 'execution_success', 'prompt_id': prompt_id}"
         )
         code_lines.append("                        return")
-
-    code_lines.append("")  # trailing newline
+        code_lines.append("                elif etype == 'progress':")
+        code_lines.append("                    step = edata['value']")
+        code_lines.append("                    mx = edata['max']")
+        code_lines.append("                    pct = int(step / mx * 100) if mx else 0")
+        code_lines.append(
+            "                    yield {'type': 'progress', 'step': step, 'max': mx, 'pct': pct}"
+        )
+        code_lines.append("                elif etype == 'execution_error':")
+        code_lines.append(
+            "                    yield {'type': 'execution_error', 'detail': edata}"
+        )
+        code_lines.append("                    return")
+        code_lines.append("")  # trailing newline
 
     # ------------------------------------------------------------------
     # 5. Write to disk
@@ -1029,25 +1019,27 @@ if __name__ == "__main__":
 
         basic = textwrap.dedent(f"""\
             \"\"\"Basic usage example — submit a prompt and print the prompt_id.\"\"\"
-            from {client_module} import ComfyWorkflowAPI
+            from {client_module} import ComfyWorkflowAPI, submit
 
             COMFY_URL = "{args.url}"
 
             api = ComfyWorkflowAPI()
-            prompt_id = api.submit(comfyui_url=COMFY_URL)
+            payload = api.build_payload()
+            prompt_id = submit(payload, comfyui_url=COMFY_URL)
             print("Queued prompt:", prompt_id)
             """)
 
         track = textwrap.dedent(f"""\
             \"\"\"Track generation progress via the async run() generator.\"\"\"
-            import asyncio, json
-            from {client_module} import ComfyWorkflowAPI
+            import asyncio
+            from {client_module} import ComfyWorkflowAPI, run
 
             COMFY_URL = "{args.url}"
 
             async def main():
                 api = ComfyWorkflowAPI()
-                async for event in api.run(comfyui_url=COMFY_URL):
+                payload = api.build_payload()
+                async for event in run(payload, comfyui_url=COMFY_URL):
                     if event["type"] == "queued":
                         print(f"Queued: {{event['prompt_id']}}")
                     elif event["type"] == "executing":

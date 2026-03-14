@@ -479,85 +479,83 @@ class ComfyWorkflowAPI:
         workflow['11']['inputs']['latent_image'] = ksampler_latent_image_11
         return {'prompt': workflow}
 
-    def submit(
-        self,
-        comfyui_url: str = 'http://127.0.0.1:8188',
-        **kwargs,
-    ) -> str:
-        """Submit the workflow to ComfyUI and return the prompt_id.
 
-        Fire-and-forget: posts the prompt and returns immediately.
-        All keyword arguments are forwarded to build_payload().
+def submit(
+    payload: Dict[str, Any],
+    comfyui_url: str = 'http://127.0.0.1:8188',
+) -> str:
+    """POST a payload to ComfyUI and return the prompt_id.
 
-        Args:
-            comfyui_url: Base URL of the ComfyUI instance.
-            **kwargs: Forwarded to build_payload().
+    Fire-and-forget: posts the prompt and returns immediately.
 
-        Returns:
-            The prompt_id string assigned by ComfyUI.
-        """
-        import requests as _requests
-        payload = self.build_payload(**kwargs)
-        resp = _requests.post(f'{comfyui_url}/prompt', json=payload)
-        resp.raise_for_status()
-        return resp.json()['prompt_id']
+    Args:
+        payload: The dict returned by build_payload().
+        comfyui_url: Base URL of the ComfyUI instance.
 
-    async def run(
-        self,
-        comfyui_url: str = 'http://127.0.0.1:8188',
-        **kwargs,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Submit the workflow and yield progress events until completion.
+    Returns:
+        The prompt_id string assigned by ComfyUI.
+    """
+    import requests as _requests
+    resp = _requests.post(f'{comfyui_url}/prompt', json=payload)
+    resp.raise_for_status()
+    return resp.json()['prompt_id']
 
-        Connects to ComfyUI's WebSocket before submitting so no events
-        are missed. Yields structured dicts suitable for piping into SSE
-        or any streaming response.
 
-        Yielded event shapes:
-            {'type': 'queued',            'prompt_id': str}
-            {'type': 'executing',         'node_id': str}
-            {'type': 'progress',          'step': int, 'max': int, 'pct': int}
-            {'type': 'execution_success', 'prompt_id': str}
-            {'type': 'execution_error',   'detail': dict}
+async def run(
+    payload: Dict[str, Any],
+    comfyui_url: str = 'http://127.0.0.1:8188',
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """Submit a payload and yield progress events until completion.
 
-        Args:
-            comfyui_url: Base URL of the ComfyUI instance.
-            **kwargs: Forwarded to build_payload().
-        """
-        payload = self.build_payload(**kwargs)
-        client_id = str(uuid.uuid4())
-        payload['client_id'] = client_id
-        ws_url = comfyui_url.replace('http', 'ws', 1)
+    Connects to ComfyUI's WebSocket before submitting so no events
+    are missed. Yields structured dicts suitable for piping into SSE
+    or any streaming response.
 
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(f'{ws_url}/ws?clientId={client_id}') as ws:
-                async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:
-                    resp.raise_for_status()
-                    data = await resp.json()
-                    prompt_id = data['prompt_id']
-                yield {'type': 'queued', 'prompt_id': prompt_id}
+    Yielded event shapes:
+        {'type': 'queued',            'prompt_id': str}
+        {'type': 'executing',         'node_id': str}
+        {'type': 'progress',          'step': int, 'max': int, 'pct': int}
+        {'type': 'execution_success', 'prompt_id': str}
+        {'type': 'execution_error',   'detail': dict}
 
-                async for msg in ws:
-                    if msg.type == aiohttp.WSMsgType.BINARY:
-                        continue
-                    if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
-                        break
-                    event = json.loads(msg.data)
-                    etype = event.get('type')
-                    edata = event.get('data', {})
+    Args:
+        payload: The dict returned by build_payload().
+        comfyui_url: Base URL of the ComfyUI instance.
+    """
+    payload = dict(payload)
+    client_id = str(uuid.uuid4())
+    payload['client_id'] = client_id
+    ws_url = comfyui_url.replace('http', 'ws', 1)
 
-                    if etype == 'executing':
-                        node = edata.get('node')
-                        if node is not None:
-                            yield {'type': 'executing', 'node_id': node}
-                        elif edata.get('prompt_id') == prompt_id:
-                            yield {'type': 'execution_success', 'prompt_id': prompt_id}
-                            return
-                    elif etype == 'progress':
-                        step = edata['value']
-                        mx = edata['max']
-                        pct = int(step / mx * 100) if mx else 0
-                        yield {'type': 'progress', 'step': step, 'max': mx, 'pct': pct}
-                    elif etype == 'execution_error':
-                        yield {'type': 'execution_error', 'detail': edata}
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(f'{ws_url}/ws?clientId={client_id}') as ws:
+            async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                prompt_id = data['prompt_id']
+            yield {'type': 'queued', 'prompt_id': prompt_id}
+
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.BINARY:
+                    continue
+                if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
+                    break
+                event = json.loads(msg.data)
+                etype = event.get('type')
+                edata = event.get('data', {})
+
+                if etype == 'executing':
+                    node = edata.get('node')
+                    if node is not None:
+                        yield {'type': 'executing', 'node_id': node}
+                    elif edata.get('prompt_id') == prompt_id:
+                        yield {'type': 'execution_success', 'prompt_id': prompt_id}
                         return
+                elif etype == 'progress':
+                    step = edata['value']
+                    mx = edata['max']
+                    pct = int(step / mx * 100) if mx else 0
+                    yield {'type': 'progress', 'step': step, 'max': mx, 'pct': pct}
+                elif etype == 'execution_error':
+                    yield {'type': 'execution_error', 'detail': edata}
+                    return

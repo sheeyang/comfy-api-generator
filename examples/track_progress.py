@@ -11,7 +11,7 @@ Run generate_api.py first to produce generated_client.py, then run:
 """
 
 import asyncio
-from generated_client import ComfyWorkflowAPI
+from generated_client import ComfyWorkflowAPI, run
 
 COMFYUI_URL = "http://127.0.0.1:8188"
 
@@ -19,14 +19,15 @@ COMFYUI_URL = "http://127.0.0.1:8188"
 async def main():
     api = ComfyWorkflowAPI()
 
-    async for event in api.run(
-        comfyui_url=COMFYUI_URL,
+    payload = api.build_payload(
         load_checkpoint_ckpt_name="SD1.5\\v1-5-pruned-emaonly.safetensors",
         clip_text_encode__prompt__text_6="beautiful scenery nature glass bottle landscape",
         clip_text_encode__prompt__text_7="text, watermark",
         empty_latent_image_width=512,
         empty_latent_image_height=512,
-    ):
+    )
+
+    async for event in run(payload, comfyui_url=COMFYUI_URL):
         if event["type"] == "queued":
             print(f"Submitted prompt {event['prompt_id']}")
 
