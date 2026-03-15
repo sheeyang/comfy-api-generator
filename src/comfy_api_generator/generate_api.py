@@ -12,6 +12,7 @@ on the generated build_payload() method.
 import json
 import re
 import sys
+from pathlib import Path
 
 import requests
 
@@ -480,7 +481,7 @@ def run_dynamic_generator(
         emit_validate_enums or emit_validate_ranges or emit_validate_connections
     )
 
-    imports = ["import json"]
+    imports = ["import json", "from pathlib import Path"]
     if any_validator:
         imports.append("import functools")
     if emit_http:
@@ -496,6 +497,9 @@ def run_dynamic_generator(
     typing_names.append("Tuple")  # always needed for ComfyConnection = Tuple[str, int]
     imports.append(f"from typing import {', '.join(sorted(typing_names))}")
 
+    # JSON filename only (forward slashes, no OS-specific separators)
+    workflow_json_name = Path(workflow_path).name
+
     code_lines: list[str] = [
         '"""',
         "Auto-generated ComfyUI workflow facade.",
@@ -504,6 +508,8 @@ def run_dynamic_generator(
         '"""',
         "",
         *imports,
+        "",
+        f"_WORKFLOW_JSON = Path(__file__).parent / {repr(workflow_json_name)}",
         "",
         "# --- Auto-Generated Strict Types ---",
         "ComfyConnection = Tuple[str, int]",
@@ -688,7 +694,7 @@ def run_dynamic_generator(
             "",
             "    __slots__ = ('base_workflow', '_template_path')",
             "",
-            f"    def __init__(self, template_path: str = {repr(workflow_path)}) -> None:",
+            "    def __init__(self, template_path: Path = _WORKFLOW_JSON) -> None:",
             "        with open(template_path, 'r', encoding='utf-8') as f:",
             "            self.base_workflow = json.load(f)",
             "        self._template_path = template_path",
