@@ -7,7 +7,10 @@ Nodes whose `_meta.title` starts with `API_` become typed parameters on the gene
 ## Install
 
 ```bash
-pip install comfy-api-generator
+# uv recommended
+uv sync
+# or pip
+pip install -e .
 ```
 
 ## Quick start
@@ -66,6 +69,9 @@ comfy-gen --help
 ## Install from GitHub
 
 ```bash
+# uv recommended
+uv pip install "git+https://github.com/anomalyco/comfy-api-generator.git"
+# or pip
 pip install "git+https://github.com/anomalyco/comfy-api-generator.git"
 ```
 

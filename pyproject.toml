@@ -10,16 +10,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["comfyui", "stable-diffusion", "code-generation", "api"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Code Generators",
-]
 
 dependencies = [
     "requests>=2.28",
@@ -29,10 +19,8 @@ dependencies = [
 [project.scripts]
 comfy-gen = "comfy_api_generator.generate_api:_cli"
 
-[project.urls]
-Homepage = "https://github.com/anomalyco/comfy-api-generator"
-Repository = "https://github.com/anomalyco/comfy-api-generator"
-"Bug Tracker" = "https://github.com/anomalyco/comfy-api-generator/issues"
+[dependency-groups]
+dev = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/comfy_api_generator"]
