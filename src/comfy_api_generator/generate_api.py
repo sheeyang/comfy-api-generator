@@ -481,7 +481,7 @@ def run_dynamic_generator(
         emit_validate_enums or emit_validate_ranges or emit_validate_connections
     )
 
-    imports = ["import json", "from pathlib import Path"]
+    imports = ["import json", "import logging", "from pathlib import Path"]
     if any_validator:
         imports.append("import functools")
     if emit_http:
@@ -509,6 +509,7 @@ def run_dynamic_generator(
         "",
         *imports,
         "",
+        "_log = logging.getLogger(__name__)",
         f"_WORKFLOW_JSON = Path(__file__).parent / {repr(workflow_json_name)}",
         "",
         "# --- Auto-Generated Strict Types ---",
@@ -796,7 +797,11 @@ def run_dynamic_generator(
         code_lines.append(
             "    resp = _requests.post(f'{comfyui_url}/prompt', json=payload)"
         )
-        code_lines.append("    resp.raise_for_status()")
+        code_lines.append("    if not resp.ok:")
+        code_lines.append(
+            "        _log.error('ComfyUI /prompt rejected payload (HTTP %d): %s', resp.status_code, resp.text)"
+        )
+        code_lines.append("        resp.raise_for_status()")
         code_lines.append("    return resp.json()['prompt_id']")
 
         # --- run() ---
@@ -859,7 +864,14 @@ def run_dynamic_generator(
         code_lines.append(
             "            async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:"
         )
-        code_lines.append("                resp.raise_for_status()")
+        code_lines.append("                if resp.status != 200:")
+        code_lines.append(
+            "                    _body = await resp.text()"
+        )
+        code_lines.append(
+            "                    _log.error('ComfyUI /prompt rejected payload (HTTP %d): %s', resp.status, _body)"
+        )
+        code_lines.append("                    resp.raise_for_status()")
         code_lines.append("                data = await resp.json()")
         code_lines.append("                prompt_id = data['prompt_id']")
         code_lines.append(
@@ -926,6 +938,9 @@ def run_dynamic_generator(
             "                    yield {'type': 'progress', 'step': step, 'max': mx, 'pct': pct}"
         )
         code_lines.append("                elif etype == 'execution_error':")
+        code_lines.append(
+            "                    _log.error('ComfyUI execution_error for prompt %s: %s', prompt_id, edata)"
+        )
         code_lines.append(
             "                    yield {'type': 'execution_error', 'detail': edata}"
         )
