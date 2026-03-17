@@ -865,9 +865,7 @@ def run_dynamic_generator(
             "            async with session.post(f'{comfyui_url}/prompt', json=payload) as resp:"
         )
         code_lines.append("                if resp.status != 200:")
-        code_lines.append(
-            "                    _body = await resp.text()"
-        )
+        code_lines.append("                    _body = await resp.text()")
         code_lines.append(
             "                    _log.error('ComfyUI /prompt rejected payload (HTTP %d): %s', resp.status, _body)"
         )
