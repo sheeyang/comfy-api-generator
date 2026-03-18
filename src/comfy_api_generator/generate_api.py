@@ -58,6 +58,8 @@ def _format_default(
         return f" = {input_value}"
     if isinstance(input_value, str):
         return f" = {repr(input_value)}"
+    if isinstance(input_value, dict):
+        return f" = {input_value!r}"
     where = f" [{context}]" if context else ""
     print(
         f"WARNING{where}: unrecognised default value {input_value!r} "
@@ -144,8 +146,8 @@ def _resolve_type(
             break
 
     if comfy_type is None:
-        # Fallback: treat as generic str when not found in schema.
-        return "str"
+        # Fallback: treat as Any when not found in schema (unknown custom widget).
+        return "Any"
 
     if isinstance(comfy_type, list):
         # API_ANY_STRING: caller explicitly opts out of enum validation —
