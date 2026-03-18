@@ -265,7 +265,6 @@ def run_dynamic_generator(
     emit_ranges: bool = True,
     emit_docstrings: bool = True,
     emit_http: bool = True,
-    subgraph_nodes: str = "skip",
 ) -> None:
     """Main entry point: parse workflow + schema, then emit generated_client.py.
 
@@ -278,9 +277,7 @@ def run_dynamic_generator(
         emit_docstrings:           include the Args: docstring block in build_payload
         emit_http:                 include submit() and run() helper methods
 
-    Subgraph node handling (ComfyUI node IDs containing ':'):
-        subgraph_nodes='skip':     exclude subgraph nodes from Nodes class and _OUTPUT_TYPES (default)
-        subgraph_nodes='sanitize': include them with ':' replaced by '_' in identifiers
+    Subgraph nodes (IDs containing ':') are always included with ':' replaced by '_'.
 
     Conflict rules (hard errors):
         emit_validate_enums=True  requires emit_schema=True
@@ -308,11 +305,6 @@ def run_dynamic_generator(
             "validate_ranges reads from _RANGES at runtime. "
             "Add --no-validate-ranges or remove --no-ranges."
         )
-    if subgraph_nodes not in ("skip", "sanitize"):
-        raise ValueError(
-            f"subgraph_nodes must be 'skip' or 'sanitize', got {subgraph_nodes!r}"
-        )
-
     # ------------------------------------------------------------------
     # 1. Load the graph template
     # ------------------------------------------------------------------
@@ -338,11 +330,6 @@ def run_dynamic_generator(
     nodes_map: dict[str, dict] = {}
 
     for node_id, node_data in workflow.items():
-        if _is_subgraph_node(node_id):
-            if subgraph_nodes == "skip":
-                continue
-            # 'sanitize' — fall through and let _title_to_class_name handle the colon
-
         title = node_data.get("_meta", {}).get("title", "")
         class_type = node_data["class_type"]
         class_name = _title_to_class_name(title, node_id, seen_class_names, nodes_map)
@@ -1121,17 +1108,6 @@ def _build_arg_parser():
             "Only build_payload() will be available."
         ),
     )
-    feat.add_argument(
-        "--subgraph-nodes",
-        default="skip",
-        choices=["skip", "sanitize"],
-        dest="subgraph_nodes",
-        help=(
-            "How to handle ComfyUI subgraph node IDs (those containing ':'). "
-            "'skip' omits them from Nodes and _OUTPUT_TYPES (default). "
-            "'sanitize' includes them with ':' replaced by '_' in identifiers."
-        ),
-    )
     return p
 
 
@@ -1160,7 +1136,6 @@ def _cli() -> None:
             emit_ranges=not no_ranges,
             emit_docstrings=not no_docstrings,
             emit_http=not no_http,
-            subgraph_nodes=args.subgraph_nodes,
         )
     except (ValueError, RuntimeError) as exc:
         print(f"ERROR: {exc}")
