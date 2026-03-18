@@ -390,8 +390,8 @@ def run_dynamic_generator(
             origin = f"node {node_id} ({title}) › {input_name}"
             if arg_name in seen_arg_names:
                 orig_origin, orig_node_id = seen_arg_names.pop(arg_name)
-                orig_new_name = f"{arg_name}_{orig_node_id}"
-                new_arg_name = f"{arg_name}_{node_id}"
+                orig_new_name = f"{arg_name}_{_id_for_identifier(orig_node_id)}"
+                new_arg_name = f"{arg_name}_{_id_for_identifier(node_id)}"
 
                 # Retroactively rename the first occurrence in arg_entries and assignment_entries.
                 for entry in arg_entries:
