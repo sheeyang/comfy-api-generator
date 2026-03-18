@@ -192,6 +192,20 @@ def _strip_any_string_tag(name: str) -> str:
     return re.sub(r"^ANY_STRING[_ ]?", "", name, flags=re.IGNORECASE).strip()
 
 
+def _id_for_identifier(node_id: str) -> str:
+    """Return a version of node_id safe to embed in a Python identifier.
+
+    ComfyUI subgraph nodes use IDs like '193:237'. Colons are not valid in
+    identifiers, so they are replaced with underscores.
+    """
+    return node_id.replace(":", "_")
+
+
+def _is_subgraph_node(node_id: str) -> bool:
+    """Return True if the node_id belongs to a ComfyUI subgraph (contains ':')."""
+    return ":" in node_id
+
+
 def _title_to_class_name(title: str, node_id: str, seen: dict, nodes_map: dict) -> str:
     """
     Convert a node _meta.title to a unique PascalCase inner class name.
@@ -207,15 +221,17 @@ def _title_to_class_name(title: str, node_id: str, seen: dict, nodes_map: dict) 
     name = _strip_any_string_tag(name)
     name = re.sub(r"[^0-9a-zA-Z]+", " ", name).strip()
     name = "".join(word.capitalize() for word in name.split())
+    safe_id = _id_for_identifier(node_id)
     if not name:
-        name = f"Node{node_id}"
+        name = f"Node{safe_id}"
     if name[0].isdigit():
         name = "N" + name
 
     if name in seen:
         original_node_id = seen[name]
+        original_safe_id = _id_for_identifier(original_node_id)
         # Retroactively rename the first entry that already has the bare name.
-        original_new_name = f"{name}_{original_node_id}"
+        original_new_name = f"{name}_{original_safe_id}"
         # Update nodes_map for the original node.
         if original_node_id in nodes_map:
             nodes_map[original_node_id]["class_name"] = original_new_name
@@ -223,7 +239,7 @@ def _title_to_class_name(title: str, node_id: str, seen: dict, nodes_map: dict) 
         del seen[name]
         seen[original_new_name] = original_node_id
 
-        new_name = f"{name}_{node_id}"
+        new_name = f"{name}_{safe_id}"
         print(
             f"WARNING: Duplicate Nodes class name '{name}' "
             f"(nodes {original_node_id} and {node_id}); "
@@ -247,6 +263,7 @@ def run_dynamic_generator(
     emit_ranges: bool = True,
     emit_docstrings: bool = True,
     emit_http: bool = True,
+    subgraph_nodes: str = "skip",
 ) -> None:
     """Main entry point: parse workflow + schema, then emit generated_client.py.
 
@@ -258,6 +275,10 @@ def run_dynamic_generator(
         emit_ranges:               include the _RANGES dict
         emit_docstrings:           include the Args: docstring block in build_payload
         emit_http:                 include submit() and run() helper methods
+
+    Subgraph node handling (ComfyUI node IDs containing ':'):
+        subgraph_nodes='skip':     exclude subgraph nodes from Nodes class and _OUTPUT_TYPES (default)
+        subgraph_nodes='sanitize': include them with ':' replaced by '_' in identifiers
 
     Conflict rules (hard errors):
         emit_validate_enums=True  requires emit_schema=True
@@ -285,6 +306,10 @@ def run_dynamic_generator(
             "validate_ranges reads from _RANGES at runtime. "
             "Add --no-validate-ranges or remove --no-ranges."
         )
+    if subgraph_nodes not in ("skip", "sanitize"):
+        raise ValueError(
+            f"subgraph_nodes must be 'skip' or 'sanitize', got {subgraph_nodes!r}"
+        )
 
     # ------------------------------------------------------------------
     # 1. Load the graph template
@@ -311,6 +336,11 @@ def run_dynamic_generator(
     nodes_map: dict[str, dict] = {}
 
     for node_id, node_data in workflow.items():
+        if _is_subgraph_node(node_id):
+            if subgraph_nodes == "skip":
+                continue
+            # 'sanitize' — fall through and let _title_to_class_name handle the colon
+
         title = node_data.get("_meta", {}).get("title", "")
         class_type = node_data["class_type"]
         class_name = _title_to_class_name(title, node_id, seen_class_names, nodes_map)
@@ -1089,6 +1119,17 @@ def _build_arg_parser():
             "Only build_payload() will be available."
         ),
     )
+    feat.add_argument(
+        "--subgraph-nodes",
+        default="skip",
+        choices=["skip", "sanitize"],
+        dest="subgraph_nodes",
+        help=(
+            "How to handle ComfyUI subgraph node IDs (those containing ':'). "
+            "'skip' omits them from Nodes and _OUTPUT_TYPES (default). "
+            "'sanitize' includes them with ':' replaced by '_' in identifiers."
+        ),
+    )
     return p
 
 
@@ -1117,6 +1158,7 @@ def _cli() -> None:
             emit_ranges=not no_ranges,
             emit_docstrings=not no_docstrings,
             emit_http=not no_http,
+            subgraph_nodes=args.subgraph_nodes,
         )
     except (ValueError, RuntimeError) as exc:
         print(f"ERROR: {exc}")
