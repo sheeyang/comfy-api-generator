@@ -203,11 +203,6 @@ def _id_for_identifier(node_id: str) -> str:
     return node_id.replace(":", "_")
 
 
-def _is_subgraph_node(node_id: str) -> bool:
-    """Return True if the node_id belongs to a ComfyUI subgraph (contains ':')."""
-    return ":" in node_id
-
-
 def _title_to_class_name(title: str, node_id: str, seen: dict, nodes_map: dict) -> str:
     """
     Convert a node _meta.title to a unique PascalCase inner class name.
